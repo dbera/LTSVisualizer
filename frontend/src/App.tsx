@@ -9,6 +9,26 @@ import axios from "axios";
 import cytoscape from "cytoscape";
 import "./App.css";
 import JsonViewer, { type JsonValue } from "./components/JsonViewer";
+import PathSelectionControls, {
+  type PathSelectionMode,
+} from "./components/PathSelectionControls";
+import {
+  downloadPlantUmlPath,
+  serializePathToPlantUml,
+} from "./graph/pathExport";
+import {
+  extendPath,
+  getCandidateEdges,
+  resolvePath,
+  startPath,
+  undoPath,
+  type SelectedPath,
+} from "./graph/pathSelection";
+import {
+  createSelectedPathJsonDocument,
+  parseGraphJsonText,
+  serializeGraphJson,
+} from "./graph/graphJson";
 
 interface GraphNode {
   id: string;
@@ -40,8 +60,7 @@ interface InspectorInfo {
   data: JsonValue;
 }
 
-//const API_URL = "http://127.0.0.1:8000/graph/upload";
-const API_URL = "/graph/upload";
+const API_URL = "http://127.0.0.1:8000/graph/upload";
 
 function App() {
   const graphContainer = useRef<HTMLDivElement | null>(null);
@@ -49,8 +68,12 @@ function App() {
   const cyRef = useRef<cytoscape.Core | null>(null);
   const graphRef = useRef<GraphData | null>(null);
   const pinnedInspectorRef = useRef<InspectorInfo | null>(null);
+  const pathModeRef = useRef<PathSelectionMode>("idle");
+  const selectedPathRef = useRef<SelectedPath | null>(null);
+  const showPathContextRef = useRef<(path: SelectedPath) => void>(() => {});
+  const addEdgeToPathRef = useRef<(edgeId: string) => void>(() => {});
 
-  const [status, setStatus] = useState("Select a PlantUML file to begin");
+  const [status, setStatus] = useState("Select an LTS graph file to begin");
   const [fileName, setFileName] = useState("");
   const [graphLoaded, setGraphLoaded] = useState(false);
   const [searchText, setSearchText] = useState("");
@@ -62,6 +85,18 @@ function App() {
     useState<OverviewLayout>("hierarchical");
   const [inspectorInfo, setInspectorInfo] = useState<InspectorInfo | null>(null);
   const [pinnedInspector, setPinnedInspector] = useState<InspectorInfo | null>(null);
+  const [pathMode, setPathMode] = useState<PathSelectionMode>("idle");
+  const [selectedPath, setSelectedPath] = useState<SelectedPath | null>(null);
+
+  function updatePathMode(mode: PathSelectionMode) {
+    pathModeRef.current = mode;
+    setPathMode(mode);
+  }
+
+  function updateSelectedPath(path: SelectedPath | null) {
+    selectedPathRef.current = path;
+    setSelectedPath(path);
+  }
 
   function makeNodeInspector(node: cytoscape.NodeSingular): InspectorInfo {
     const marking = node.data("marking") as JsonValue | null | undefined;
@@ -102,6 +137,9 @@ function App() {
           label: node.id,
           marking: node.marking,
         },
+        grabbable: true,
+        selectable: true,
+        locked: false,
       })),
       ...visibleEdges.map((edge) => ({
         data: {
@@ -132,6 +170,8 @@ function App() {
     cy.startBatch();
     cy.elements().remove();
     cy.add(elements);
+    cy.nodes().unlock();
+    cy.nodes().grabify();
     cy.endBatch();
 
     if (layoutName === "breadthfirst") {
@@ -159,6 +199,273 @@ function App() {
     // Keep a natural, readable scale. The user can pan and zoom freely.
     cy.zoom(0.85);
     cy.pan({ x: 90, y: 90 });
+  }
+
+  function applyPathClasses(path: SelectedPath | null) {
+    const cy = cyRef.current;
+    const graph = graphRef.current;
+    if (!cy) return;
+
+    cy.elements().removeClass(
+      "path-node path-edge path-start path-end path-next-edge path-next-node path-dimmed"
+    );
+    if (!path || !graph) return;
+
+    const resolvedPath = resolvePath(graph, path);
+    const nodeIds = resolvedPath.nodeIds;
+    const endNodeId = resolvedPath.endNodeId;
+    const selectedEdgeIds = new Set(path.edgeIds);
+
+    cy.elements().addClass("path-dimmed");
+    nodeIds.forEach((nodeId) => {
+      cy.getElementById(nodeId).removeClass("path-dimmed").addClass("path-node");
+    });
+    path.edgeIds.forEach((edgeId) => {
+      const selectedEdge = cy.getElementById(edgeId);
+      selectedEdge
+        .removeClass("path-dimmed")
+        .addClass("path-edge")
+        .data("label", selectedEdge.data("transition") ?? "");
+    });
+    cy.getElementById(path.startNodeId).addClass("path-start");
+    cy.getElementById(endNodeId).addClass("path-end");
+
+    cy.elements().unselect();
+
+    getCandidateEdges(graph, path)
+      .filter((edge) => !selectedEdgeIds.has(edge.id))
+      .forEach((edge) => {
+        cy.getElementById(edge.id)
+          .removeClass("path-dimmed")
+          .addClass("path-next-edge")
+          .data("label", edge.transition);
+        cy.getElementById(edge.target)
+          .removeClass("path-dimmed")
+          .addClass("path-next-node");
+      });
+  }
+
+  function showPathContext(path: SelectedPath) {
+    const graph = graphRef.current;
+    const cy = cyRef.current;
+    if (!graph || !cy) return;
+
+    const resolvedPath = resolvePath(graph, path);
+    const selectedEdges = resolvedPath.edges;
+    const pathNodeIds = resolvedPath.nodeIds;
+    const endNodeId = resolvedPath.endNodeId;
+    const outgoingEdges = getCandidateEdges(graph, path);
+    const requiredNodeIds = new Set<string>(pathNodeIds);
+    const requiredEdgeIds = new Set<string>([
+      ...path.edgeIds,
+      ...outgoingEdges.map((edge) => edge.id),
+    ]);
+
+    outgoingEdges.forEach((edge) => requiredNodeIds.add(edge.target));
+
+    // Remove stale alternatives from earlier path steps. Keep only the selected
+    // path and the valid choices from the current endpoint.
+    cy.startBatch();
+    cy.edges()
+      .filter((edge) => !requiredEdgeIds.has(edge.id()))
+      .remove();
+    cy.nodes()
+      .filter((node) => !requiredNodeIds.has(node.id()))
+      .remove();
+    cy.endBatch();
+
+    const missingNodeIds = new Set(
+      [...requiredNodeIds].filter((nodeId) => cy.getElementById(nodeId).empty())
+    );
+    const missingEdges = [...selectedEdges, ...outgoingEdges].filter(
+      (edge) => cy.getElementById(edge.id).empty()
+    );
+
+    const endpoint = cy.getElementById(endNodeId);
+    const endpointPosition = endpoint.nonempty()
+      ? endpoint.position()
+      : { x: 160, y: 160 };
+    const targetNodeIds = [...new Set(outgoingEdges.map((edge) => edge.target))];
+
+    cy.startBatch();
+
+    if (missingNodeIds.size > 0) {
+      const nodeElements = buildElements(graph, missingNodeIds, [], showTransitionLabels);
+      cy.add(nodeElements);
+
+      [...missingNodeIds].forEach((nodeId) => {
+        const targetIndex = Math.max(0, targetNodeIds.indexOf(nodeId));
+        const verticalOffset =
+          targetIndex - (Math.max(targetNodeIds.length, 1) - 1) / 2;
+        cy.getElementById(nodeId).position({
+          x: endpointPosition.x + 230,
+          y: endpointPosition.y + verticalOffset * 135,
+        });
+      });
+    }
+
+    if (missingEdges.length > 0) {
+      cy.add(
+        buildElements(graph, new Set<string>(), missingEdges, true)
+      );
+    }
+
+    cy.nodes().unlock();
+    cy.nodes().grabify();
+    cy.endBatch();
+    setShowingAll(false);
+    setSelectedStateId(endNodeId);
+    setSearchText(endNodeId);
+    applyPathClasses(path);
+  }
+
+  function startPathSelection() {
+    const graph = graphRef.current;
+    if (!graph) {
+      setStatus("Open a graph before selecting a path");
+      return;
+    }
+
+    const requestedStateId = selectedStateId ?? searchText.trim();
+    const startStateId = graph.nodes.some((node) => node.id === requestedStateId)
+      ? requestedStateId
+      : null;
+
+    cyRef.current?.elements().removeClass(
+      "path-node path-edge path-start path-end path-next-edge path-next-node path-dimmed"
+    );
+
+    if (!startStateId) {
+      updateSelectedPath(null);
+      updatePathMode("select-start");
+      setStatus(
+        "Path selection: search for a state first, or click a visible state to use it as the start"
+      );
+      return;
+    }
+
+    const path = startPath(graph, startStateId);
+    updateSelectedPath(path);
+    updatePathMode("select-edges");
+    cyRef.current?.edges().forEach((edge) => {
+      edge.data("label", edge.data("transition") ?? "");
+    });
+    applyPathClasses(path);
+    setStatus(
+      `Path selection started at state ${startStateId}. Select a highlighted transition or cyan target state.`
+    );
+  }
+
+  function addEdgeToPath(edgeId: string) {
+    const graph = graphRef.current;
+    const path = selectedPathRef.current;
+    if (!graph || !path) return;
+
+    try {
+      const nextPath = extendPath(graph, path, edgeId);
+      const resolvedPath = resolvePath(graph, nextPath);
+      updateSelectedPath(nextPath);
+      showPathContext(nextPath);
+      setStatus(
+        `Path selection: ${resolvedPath.stateCount} states and ${resolvedPath.transitionCount} transitions. Select a highlighted transition or cyan target state from state ${resolvedPath.endNodeId}.`
+      );
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Could not extend the selected path"
+      );
+    }
+  }
+
+  showPathContextRef.current = showPathContext;
+  addEdgeToPathRef.current = addEdgeToPath;
+
+  function undoPathStep() {
+    const path = selectedPathRef.current;
+    if (!path || path.edgeIds.length === 0) return;
+    const nextPath = undoPath(path);
+    updateSelectedPath(nextPath);
+    showPathContext(nextPath);
+    setStatus("Removed the last path transition");
+  }
+
+  function clearPathSelection() {
+    const previousPath = selectedPathRef.current;
+    updateSelectedPath(null);
+    updatePathMode("idle");
+    cyRef.current?.elements().removeClass(
+      "path-node path-edge path-start path-end path-next-edge path-next-node path-dimmed"
+    );
+    const stateId = selectedStateId ?? previousPath?.startNodeId;
+    if (stateId && graphRef.current?.nodes.some((node) => node.id === stateId)) {
+      showNeighborhood(stateId, hopCount);
+    } else {
+      setStatus("Path selection cleared");
+    }
+  }
+
+  function downloadTextFile(
+    content: string,
+    fileName: string,
+    mimeType: string
+  ) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportSelectedPath() {
+    const graph = graphRef.current;
+    const path = selectedPathRef.current;
+    if (!graph || !path) {
+      setStatus("Select a path before exporting");
+      return;
+    }
+    try {
+      const exportedPath = serializePathToPlantUml(graph, path);
+      downloadPlantUmlPath(exportedPath);
+      setStatus(`Exported ${exportedPath.fileName}`);
+    } catch (error) {
+      console.error(error);
+      setStatus(error instanceof Error ? error.message : "Could not export the selected path");
+    }
+  }
+
+  function exportSelectedPathJson() {
+    const graph = graphRef.current;
+    const path = selectedPathRef.current;
+    if (!graph || !path) {
+      setStatus("Select a path before exporting");
+      return;
+    }
+
+    try {
+      const resolved = resolvePath(graph, path);
+      const document = createSelectedPathJsonDocument(graph, path, {
+        title: `Selected path ${resolved.startNodeId} to ${resolved.endNodeId}`,
+      });
+      const fileName = `LTSVisualizer-path-${resolved.startNodeId}-to-${resolved.endNodeId}.json`;
+      downloadTextFile(
+        serializeGraphJson(document),
+        fileName,
+        "application/json;charset=utf-8"
+      );
+      setStatus(`Exported ${fileName}`);
+    } catch (error) {
+      console.error(error);
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Could not export the selected path as JSON"
+      );
+    }
   }
 
   function showNeighborhood(
@@ -330,20 +637,53 @@ function App() {
     setInspectorInfo(null);
     setPinnedInspector(null);
     pinnedInspectorRef.current = null;
-
-    const formData = new FormData();
-    formData.append("file", file);
+    updateSelectedPath(null);
+    updatePathMode("idle");
 
     try {
-      const response = await axios.post<GraphData>(API_URL, formData);
-      const graph = response.data;
+      const isJsonFile = file.name.toLowerCase().endsWith(".json");
+      let graph: GraphData;
+      let importedPath: SelectedPath | null = null;
+
+      if (isJsonFile) {
+        const parsed = parseGraphJsonText(await file.text());
+        graph = parsed.graph;
+        importedPath = parsed.selectedPath;
+      } else {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await axios.post<GraphData>(API_URL, formData);
+        graph = response.data;
+      }
 
       graphRef.current = graph;
       setGraphLoaded(true);
       setShowTransitionLabels(graph.nodes.length <= 300);
 
       if (graph.nodes.length === 0) {
+        setGraphLoaded(false);
         setStatus("The selected file contains no graph nodes");
+        return;
+      }
+
+      if (importedPath) {
+        const resolved = resolvePath(graph, importedPath);
+        const allNodeIds = new Set(graph.nodes.map((node) => node.id));
+
+        updateSelectedPath(null);
+        updatePathMode("idle");
+        setShowTransitionLabels(true);
+        replaceVisibleGraph(
+          buildElements(graph, allNodeIds, graph.edges, true),
+          "breadthfirst"
+        );
+        setSelectedStateId(importedPath.startNodeId);
+        setSearchText(importedPath.startNodeId);
+        setShowingAll(true);
+        setOverviewLayout("hierarchical");
+        setStatus(
+          `Loaded ${file.name} as a regular graph: ${graph.nodes.length} unique states and ${graph.edges.length} unique transitions. The saved traversal contains ${resolved.stateCount} state occurrences and ${resolved.transitionCount} transition steps, ending at state ${resolved.endNodeId}.`
+        );
         return;
       }
 
@@ -368,6 +708,8 @@ function App() {
         } else {
           setStatus(`Could not load ${file.name}`);
         }
+      } else if (error instanceof Error) {
+        setStatus(error.message);
       } else {
         setStatus(`Could not load ${file.name}`);
       }
@@ -392,7 +734,7 @@ function App() {
       layout: { name: "preset" },
       minZoom: 0.05,
       maxZoom: 4,
-      wheelSensitivity: 0.2,
+      wheelSensitivity: 0.55,
       style: [
         {
           selector: "node",
@@ -404,8 +746,8 @@ function App() {
             "font-weight": 600,
             "text-valign": "center",
             "text-halign": "center",
-            width: "34px",
-            height: "34px",
+            width: "42px",
+            height: "42px",
             "border-width": 2,
             "border-color": "#1e3a8a",
           },
@@ -429,6 +771,65 @@ function App() {
             "text-wrap": "wrap",
             "text-max-width": "190px",
             "text-margin-x": 12,
+          },
+        },
+        {
+          selector: ".path-dimmed",
+          style: { opacity: 0.32 },
+        },
+        {
+          selector: "node.path-node",
+          style: {
+            opacity: 1,
+            "overlay-color": "#2563eb",
+            "overlay-opacity": 0,
+            "background-color": "#2563eb",
+            "border-color": "#1d4ed8",
+            "border-width": 4,
+          },
+        },
+        {
+          selector: "node.path-start",
+          style: {
+            "background-color": "#16a34a",
+            "border-color": "#14532d",
+          },
+        },
+        {
+          selector: "node.path-end",
+          style: {
+            "background-color": "#f59e0b",
+            "border-color": "#92400e",
+          },
+        },
+        {
+          selector: "node.path-next-node",
+          style: {
+            opacity: 1,
+            width: "56px",
+            height: "56px",
+            "background-color": "#06b6d4",
+            "border-color": "#0e7490",
+            "border-width": 4,
+          },
+        },
+        {
+          selector: "edge.path-edge",
+          style: {
+            opacity: 1,
+            width: 4,
+            "line-color": "#2563eb",
+            "target-arrow-color": "#2563eb",
+          },
+        },
+        {
+          selector: "edge.path-next-edge",
+          style: {
+            opacity: 1,
+            width: 6,
+            "line-color": "#06b6d4",
+            "target-arrow-color": "#06b6d4",
+            "arrow-scale": 1.05,
           },
         },
         {
@@ -459,6 +860,9 @@ function App() {
     });
 
     cyRef.current = cy;
+    cy.autoungrabify(false);
+    cy.nodes().unlock();
+    cy.nodes().grabify();
 
     cy.on("mouseover", "node", (event) => {
       if (!pinnedInspectorRef.current) {
@@ -483,15 +887,61 @@ function App() {
       const stateId = node.id();
       const info = makeNodeInspector(node);
 
-      setSelectedStateId(stateId);
-      setSearchText(stateId);
+      if (pathModeRef.current === "select-start") {
+        const graph = graphRef.current;
+        if (!graph) return;
+        const path = startPath(graph, stateId);
+        updateSelectedPath(path);
+        updatePathMode("select-edges");
+        cyRef.current?.edges().forEach((edge) => {
+          edge.data("label", edge.data("transition") ?? "");
+        });
+        showPathContextRef.current(path);
+        setStatus(
+          `Path selection started at state ${stateId}. Select a highlighted transition or target state.`
+        );
+      } else if (pathModeRef.current === "select-edges") {
+        const graph = graphRef.current;
+        const path = selectedPathRef.current;
+
+        if (graph && path) {
+          const endNodeId = resolvePath(graph, path).endNodeId;
+          const matchingEdges = getCandidateEdges(graph, path).filter(
+            (edge) => edge.target === stateId
+          );
+
+          if (matchingEdges.length === 1) {
+            addEdgeToPathRef.current(matchingEdges[0].id);
+          } else if (matchingEdges.length > 1) {
+            setStatus(
+              `${matchingEdges.length} transitions connect state ${endNodeId} to state ${stateId}. Click the desired highlighted transition.`
+            );
+          } else if (stateId === endNodeId) {
+            setStatus(
+              `State ${stateId} is the current path endpoint. Select a highlighted transition or cyan target state.`
+            );
+          } else {
+            setStatus(
+              `State ${stateId} is not directly reachable from state ${endNodeId}. Select a cyan target state.`
+            );
+          }
+        }
+      } else {
+        setSelectedStateId(stateId);
+        setSearchText(stateId);
+      }
+
       pinnedInspectorRef.current = info;
       setPinnedInspector(info);
       setInspectorInfo(info);
     });
 
     cy.on("tap", "edge", (event) => {
-      const info = makeEdgeInspector(event.target);
+      const edge = event.target;
+      const info = makeEdgeInspector(edge);
+      if (pathModeRef.current === "select-edges") {
+        addEdgeToPathRef.current(edge.id());
+      }
       pinnedInspectorRef.current = info;
       setPinnedInspector(info);
       setInspectorInfo(info);
@@ -503,7 +953,66 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) {
+      return;
+    }
+
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        cy.resize();
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) {
+        window.cancelAnimationFrame(secondFrame);
+      }
+    };
+  }, [pathMode, selectedPath?.edgeIds.length]);
+
+  useEffect(() => {
+    const container = graphContainer.current;
+    const cy = cyRef.current;
+    if (!container || !cy || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      cy.resize();
+    });
+    observer.observe(container);
+
+    return () => observer.disconnect();
+  }, []);
+
   const visibleInspector = pinnedInspector ?? inspectorInfo;
+  const selectedPathEdges = selectedPath?.edgeIds ?? [];
+  const selectedPathEndNodeId = (() => {
+    if (!selectedPath || !graphRef.current) return null;
+    return resolvePath(graphRef.current, selectedPath).endNodeId;
+  })();
+  const pathSelectionActive = pathMode !== "idle";
+  const pathCandidateEdges = (() => {
+    const graph = graphRef.current;
+    if (
+      !graph ||
+      !selectedPath ||
+      pathMode !== "select-edges" ||
+      !selectedPathEndNodeId
+    ) {
+      return [];
+    }
+
+    return getCandidateEdges(graph, selectedPath).map((edge) => ({
+      id: edge.id,
+      transition: edge.transition,
+      target: edge.target,
+    }));
+  })();
   return (
     <main className="app">
       <header className="header">
@@ -517,7 +1026,7 @@ function App() {
           <input
             ref={fileInput}
             type="file"
-            accept=".puml,.plantuml,.txt"
+            accept=".puml,.plantuml,.txt,.json"
             className="file-input"
             onChange={handleFileSelected}
           />
@@ -526,7 +1035,7 @@ function App() {
             className="primary-button"
             onClick={() => fileInput.current?.click()}
           >
-            Open PlantUML file
+            Open LTS Graph File
           </button>
         </div>
       </header>
@@ -539,9 +1048,9 @@ function App() {
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
             placeholder="e.g. 609"
-            disabled={!graphLoaded}
+            disabled={!graphLoaded || pathSelectionActive}
           />
-          <button type="submit" disabled={!graphLoaded}>
+          <button type="submit" disabled={!graphLoaded || pathSelectionActive}>
             Show state
           </button>
         </form>
@@ -554,7 +1063,7 @@ function App() {
               type="button"
               className={!showingAll && hopCount === hops ? "active" : ""}
               onClick={() => changeHopCount(hops)}
-              disabled={!graphLoaded}
+              disabled={!graphLoaded || pathSelectionActive}
             >
               {hops} hop{hops === 1 ? "" : "s"}
             </button>
@@ -567,7 +1076,7 @@ function App() {
             type="button"
             className={overviewLayout === "hierarchical" ? "active" : ""}
             onClick={() => changeOverviewLayout("hierarchical")}
-            disabled={!graphLoaded}
+            disabled={!graphLoaded || pathSelectionActive}
           >
             Hierarchical
           </button>
@@ -575,7 +1084,7 @@ function App() {
             type="button"
             className={overviewLayout === "grid" ? "active" : ""}
             onClick={() => changeOverviewLayout("grid")}
-            disabled={!graphLoaded}
+            disabled={!graphLoaded || pathSelectionActive}
           >
             Grid
           </button>
@@ -585,7 +1094,7 @@ function App() {
           type="button"
           className={showTransitionLabels ? "active" : ""}
           onClick={toggleTransitionLabels}
-          disabled={!graphLoaded}
+          disabled={!graphLoaded || pathSelectionActive}
         >
           {showTransitionLabels ? "Hide labels" : "Show labels"}
         </button>
@@ -594,10 +1103,24 @@ function App() {
           type="button"
           className={showingAll ? "active" : ""}
           onClick={() => showAll()}
-          disabled={!graphLoaded}
+          disabled={!graphLoaded || pathSelectionActive}
         >
           Show all
         </button>
+        <PathSelectionControls
+          graphLoaded={graphLoaded}
+          mode={pathMode}
+          startNodeId={selectedPath?.startNodeId ?? null}
+          endNodeId={selectedPathEndNodeId}
+          edgeCount={selectedPathEdges.length}
+          onStart={startPathSelection}
+          onUndo={undoPathStep}
+          onClear={clearPathSelection}
+          onExport={exportSelectedPath}
+          onExportJson={exportSelectedPathJson}
+          candidates={pathCandidateEdges}
+          onSelectCandidate={addEdgeToPath}
+        />
       </section>
 
       <section className="workspace">
