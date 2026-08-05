@@ -39,7 +39,8 @@ interface InspectorInfo {
   content: string;
 }
 
-const API_URL = "http://127.0.0.1:8000/graph/upload";
+// const API_URL = "http://127.0.0.1:8000/graph/upload";
+const API_URL = "/graph/upload";
 
 function App() {
   const graphContainer = useRef<HTMLDivElement | null>(null);

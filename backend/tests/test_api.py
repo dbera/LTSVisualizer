@@ -6,12 +6,13 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_root_endpoint():
-    response = client.get("/")
+def test_health_endpoint():
+    response = client.get("/api/health")
 
     assert response.status_code == 200
     assert response.json() == {
-        "message": "Reachability Graph Dashboard API is running"
+        "status": "ok",
+        "application": "LTSVisualizer",
     }
 
 
@@ -97,7 +98,10 @@ def test_upload_rejects_unsupported_extension():
 
     assert response.status_code == 400
     assert response.json() == {
-        "detail": "Please select a .puml or .plantuml file."
+        "detail": (
+            "Please select a .puml, .plantuml, "
+            "or compatible .txt file."
+        )
     }
 
 

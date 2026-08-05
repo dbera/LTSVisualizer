@@ -1,4 +1,8 @@
 notes.txt
+
+# Local release packages
+release/
+
 # ============================================================
 # Python
 # ============================================================
@@ -83,7 +87,6 @@ sample-data/*.json
 # PyInstaller output, to be enabled later
 backend/build/
 backend/dist/
-*.spec
 
 # ============================================================
 # Keep source and configuration files
