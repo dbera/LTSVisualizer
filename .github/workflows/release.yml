@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version label for a test artifact, for example 0.1.0-test"
+        description: "Version label for a manual test build"
         required: false
         default: "manual"
 
@@ -72,8 +72,8 @@ jobs:
             throw "frontend/dist/index.html was not created"
           }
 
-          $javascript = Get-ChildItem "frontend/dist/assets" -Filter "*.js"
-          $stylesheets = Get-ChildItem "frontend/dist/assets" -Filter "*.css"
+          $javascript = @(Get-ChildItem "frontend/dist/assets" -Filter "*.js")
+          $stylesheets = @(Get-ChildItem "frontend/dist/assets" -Filter "*.css")
 
           if ($javascript.Count -eq 0) {
             throw "No JavaScript bundle was created"
@@ -107,29 +107,38 @@ jobs:
             throw "Bundled frontend was not created: $index"
           }
 
-      - name: Create release package and checksum
+      - name: Create release ZIP and checksum
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force release | Out-Null
 
           $zipPath = "release/LTSVisualizer-Windows-x64.zip"
+
           Compress-Archive `
             -Path "dist/LTSVisualizer/*" `
             -DestinationPath $zipPath `
             -Force
 
-          $hash = Get-FileHash $zipPath -Algorithm SHA256
-          "$($hash.Hash)  LTSVisualizer-Windows-x64.zip" |
-            Set-Content "release/SHA256SUMS.txt"
-
           if (-not (Test-Path $zipPath)) {
             throw "Windows release ZIP was not created"
           }
 
-      - name: Upload workflow artifact
+          $hash = Get-FileHash $zipPath -Algorithm SHA256
+          "$($hash.Hash)  LTSVisualizer-Windows-x64.zip" |
+            Set-Content "release/SHA256SUMS.txt"
+
+      - name: Upload directly testable Windows application
         uses: actions/upload-artifact@v4
         with:
           name: LTSVisualizer-Windows-x64
+          path: dist/LTSVisualizer/**
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload release files for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: LTSVisualizer-release-files
           path: |
             release/LTSVisualizer-Windows-x64.zip
             release/SHA256SUMS.txt
