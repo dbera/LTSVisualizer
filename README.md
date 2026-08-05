@@ -28,6 +28,7 @@ LTSVisualizer supports small linear graphs and large cyclic state spaces contain
 - Preserve structured transition-input data.
 - Preserve structured state markings and token values.
 - Preserve raw transition inputs and raw state markings when available.
+- Export the complete loaded graph as JSON for later frontend-only use.
 
 ### Graph exploration
 
@@ -171,8 +172,9 @@ The FastAPI backend is not required for:
 - Exploring graphs
 - Inspecting markings and transition inputs
 - Selecting paths
-- Exporting paths as JSON
-- Exporting paths as PlantUML
+- Exporting the complete graph as JSON
+- Exporting selected paths as JSON
+- Exporting selected paths as PlantUML
 
 ### PlantUML input
 
@@ -538,6 +540,66 @@ The export preserves:
 
 Exported JSON files can be reopened without running the backend.
 
+## Export the complete graph as JSON
+
+Select **Export graph JSON** to export every state and transition in the currently loaded graph.
+
+The export uses the complete loaded graph, regardless of:
+
+- The currently visible neighborhood
+- The selected state
+- Whether **Show all** is active
+- The currently selected path
+
+The generated JSON preserves:
+
+- All unique states
+- All unique transitions
+- Parallel edges
+- State markings and raw markings
+- Transition inputs and raw inputs
+- Transition labels
+- Transition colors
+- Graph state and transition counts
+
+The filename is derived from the opened source file and made safe for downloading.
+
+Examples:
+
+```text
+example.puml       -> example.json
+my graph.puml      -> my-graph.json
+rg.plantuml.txt    -> rg.plantuml.json
+```
+
+This enables a backend-independent workflow:
+
+```text
+PlantUML file
+  -> FastAPI parsing
+  -> Export graph JSON
+  -> Reopen JSON later without FastAPI
+```
+
+A complete graph JSON export has document type `graph` and includes graph counts in its metadata:
+
+```json
+{
+  "format": "ltsvisualizer",
+  "version": 1,
+  "type": "graph",
+  "metadata": {
+    "title": "Example graph",
+    "stateCount": 1000,
+    "transitionCount": 2500
+  },
+  "nodes": [],
+  "edges": []
+}
+```
+
+The exported document contains the graph stored in memory, not only the nodes and transitions currently rendered by Cytoscape.js. A one-hop neighborhood can therefore be visible while **Export graph JSON** still exports the complete loaded graph.
+
 ## Architecture
 
 LTSVisualizer supports frontend-only JSON workflows and combined PlantUML workflows.
@@ -553,8 +615,9 @@ React frontend
   |-- JSON parsing and validation
   |-- Cytoscape.js visualization
   |-- Manual path selection
-  |-- JSON path export
-  `-- PlantUML path export
+  |-- Complete graph JSON export
+  |-- Selected-path JSON export
+  `-- Selected-path PlantUML export
 ```
 
 The JSON workflow runs completely in the browser.
@@ -759,7 +822,7 @@ Open the URL displayed by Vite, normally:
 http://localhost:5173
 ```
 
-JSON input, exploration, inspection, path selection, and path export work without starting FastAPI.
+JSON input, exploration, inspection, path selection, complete-graph JSON export, and selected-path export work without starting FastAPI.
 
 PlantUML files cannot be opened while the backend is unavailable.
 
@@ -925,7 +988,11 @@ Before packaging or releasing:
 11. Test manual path selection.
 12. Export and reopen a selected path as PlantUML.
 13. Export and reopen a selected path as JSON.
-14. Confirm there are no browser-console errors.
+14. Focus a small neighborhood and export the complete loaded graph as JSON.
+15. Stop the backend and reopen the complete graph JSON.
+16. Confirm that states outside the previously visible neighborhood are available.
+17. Confirm that markings, transition inputs, colors, and parallel edges are preserved.
+18. Confirm there are no browser-console errors.
 
 ## Build the Windows application locally
 
@@ -1091,7 +1158,6 @@ When the workflow succeeds, the release is published at:
 - The PlantUML parser targets the reachability-graph convention described above rather than every PlantUML diagram type.
 - PlantUML input requires the FastAPI backend.
 - JSON input works without the backend.
-- JSON export currently exports a selected path rather than the complete loaded graph.
 - Extremely large full-graph views can be visually dense even when rendering remains responsive.
 - Global force-directed layouts are intentionally avoided for large state spaces because they can be computationally expensive in the browser.
 - Uploaded PlantUML files are parsed in memory and are not intended to be permanently stored by the backend.
@@ -1102,9 +1168,8 @@ When the workflow succeeds, the release is published at:
 
 Planned development priorities:
 
-1. Export the complete loaded graph as JSON.
-2. Refactor graph loading, graph types, Cytoscape integration, and visualization logic.
-3. Experiment with constrained graph search.
+1. Refactor graph loading, shared graph types, Cytoscape integration, and visualization logic.
+2. Experiment with constrained graph search.
 
 The constrained graph-search experiment may support:
 
