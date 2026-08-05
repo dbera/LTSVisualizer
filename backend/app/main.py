@@ -24,7 +24,7 @@ FRONTEND_ASSETS = FRONTEND_DIST / "assets"
 
 app = FastAPI(
     title="LTSVisualizer API",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 app.add_middleware(

@@ -6,30 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-05
+
 ### Added
 
-- Added syntax-colored structured JSON rendering for state markings and transition inputs.
-- Added individual expand-and-collapse controls for inspector objects and arrays.
+- Added a reusable `JsonViewer` React component for structured state-marking and transition-input data.
+- Added syntax-colored JSON rendering for keys, strings, numbers, booleans, null values, and punctuation.
+- Added individual expand-and-collapse controls for nested objects and arrays.
 - Added global **Expand all** and **Collapse all** controls.
 - Added collection-size summaries for collapsed arrays and objects.
 - Added clear indicators for empty arrays and objects.
 - Added a **Copy JSON** action with temporary success and failure feedback.
-- Added distinct colors for JSON keys, strings, numbers, booleans, null values, and punctuation.
 - Added responsive JSON-viewer controls for narrow browser windows.
+- Added dedicated JSON-viewer styling in `frontend/src/components/JsonViewer.css`.
 
 ### Changed
 
-- Changed the inspector to retain and render structured values instead of displaying preformatted JSON text.
-- Improved the readability and navigation of deeply nested state markings and transition inputs.
-- Limited the initial expansion depth so large nested values remain manageable.
+- Updated `frontend/src/App.tsx` to retain structured marking and transition-input values instead of converting them to preformatted JSON strings.
+- Updated the inspector to render state and transition data through the new `JsonViewer` component.
+- Preserved hover inspection and click-to-pin behavior while integrating the structured-data viewer.
 - Reset JSON-viewer expansion state when a different state or transition is selected.
-- Kept the frontend upload endpoint relative as `/graph/upload` so development proxy mode and combined production mode use the same frontend bundle.
+- Limited the initial expansion depth so large nested values remain manageable.
+- Improved the readability and navigation of deeply nested state markings and transition inputs.
+- Updated `frontend/src/App.css` to remove obsolete styling for the previous plain `<pre>` inspector representation.
+- Kept the frontend upload endpoint relative as `/graph/upload` so development proxy mode, combined production mode, and packaged Windows mode use the same frontend bundle.
 
 ### Fixed
 
 - Fixed the combined production frontend after an obsolete hardcoded `http://127.0.0.1:8000/graph/upload` endpoint was detected in the generated JavaScript bundle.
 - Fixed production graph uploads by restoring the relative `/graph/upload` endpoint and rebuilding the frontend assets.
-- Removed obsolete inspector styling that targeted the previous plain `<pre>` representation.
+- Fixed inspector styling conflicts left by the previous plain-text JSON representation.
 
 ## [0.1.1] - 2026-08-05
 
@@ -139,7 +145,7 @@ When preparing a release:
 Example:
 
 ```text
-## [0.2.0] - 2026-08-05
+## [0.2.1] - 2026-08-05
 ```
 
 ## Versioning guidance
@@ -156,6 +162,7 @@ After version `1.0.0`, use Semantic Versioning:
 - **MINOR** for backward-compatible functionality.
 - **PATCH** for backward-compatible fixes.
 
-[Unreleased]: https://github.com/dbera/LTSVisualizer/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/dbera/LTSVisualizer/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/dbera/LTSVisualizer/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/dbera/LTSVisualizer/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/dbera/LTSVisualizer/releases/tag/v0.1.0
