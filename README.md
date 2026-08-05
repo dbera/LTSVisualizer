@@ -69,16 +69,79 @@ The comments are optional. A file containing only nodes, edges, and transition l
 
 ## Download for Windows
 
-Download the latest portable Windows release from:
+Download the latest portable Windows version from:
 
-https://github.com/dbera/LTSVisualizer/releases/latest
-
-1. Download `LTSVisualizer-Windows-x64.zip`.
-2. Extract the complete ZIP.
-3. Run `LTSVisualizer.exe`.
-4. Keep the `_internal` folder beside the executable.
+<https://github.com/dbera/LTSVisualizer/releases/latest>
 
 Python, Node.js, npm, and a development environment are not required.
+
+### Installation
+
+1. Download `LTSVisualizer-Windows-x64.zip` from the official GitHub Release.
+
+2. Open PowerShell in the directory containing the downloaded ZIP.
+
+3. Remove the Windows internet-download restriction:
+
+   ```powershell
+   Unblock-File .\LTSVisualizer-Windows-x64.zip
+   ```
+
+4. Extract the complete ZIP file.
+
+5. Open the extracted directory.
+
+6. Run:
+
+   ```text
+   LTSVisualizer.exe
+   ```
+
+7. Keep the `_internal` directory beside `LTSVisualizer.exe`. The application will not run correctly without it.
+
+LTSVisualizer starts a local server and opens the dashboard automatically in the default browser.
+
+### Verify the download
+
+The GitHub Release includes a file named `SHA256SUMS.txt`.
+
+Calculate the SHA-256 checksum of the downloaded ZIP:
+
+```powershell
+Get-FileHash .\LTSVisualizer-Windows-x64.zip -Algorithm SHA256
+```
+
+Compare the displayed hash with the value in `SHA256SUMS.txt`. The two values must match.
+
+Only run binaries downloaded from the official LTSVisualizer Releases page.
+
+### Windows SmartScreen notice
+
+LTSVisualizer is currently distributed as an unsigned Windows application. Microsoft Defender SmartScreen may therefore display a **Windows protected your PC** warning.
+
+If the ZIP was downloaded from the official GitHub Release and the SHA-256 checksum matches:
+
+1. Select **More info** in the SmartScreen window.
+2. Confirm that the application name is `LTSVisualizer.exe`.
+3. Select **Run anyway**, if permitted by the Windows security policy.
+
+Some managed or corporate Windows systems may prevent unsigned applications from running. In that case, contact the system administrator.
+
+### Optional graphical unblock method
+
+Depending on the Windows configuration, the downloaded ZIP may provide an **Unblock** option:
+
+1. Right-click `LTSVisualizer-Windows-x64.zip`.
+2. Select **Properties**.
+3. On the **General** tab, select **Unblock**, if available.
+4. Select **Apply**.
+5. Extract the ZIP after unblocking it.
+
+If the **Unblock** option is not shown or does not work, use the PowerShell command:
+
+```powershell
+Unblock-File .\LTSVisualizer-Windows-x64.zip
+```
 
 ## Project structure
 
