@@ -1,0 +1,159 @@
+name: Feature request
+description: Suggest an improvement or new capability for LTSVisualizer
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting an improvement to LTSVisualizer.
+
+        Before submitting, please search the existing issues and describe the user problem before proposing a particular implementation.
+
+        Do not include confidential, proprietary, personal, or security-sensitive information in the request, examples, screenshots, or attachments.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched the existing issues and did not find an equivalent request.
+          required: true
+        - label: I have described the user problem and intended workflow.
+          required: true
+        - label: I removed confidential, proprietary, personal, and security-sensitive information.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature area
+      description: Select the area that best matches the requested enhancement.
+      options:
+        - PlantUML parser compatibility
+        - Token or marking parsing
+        - File upload and validation
+        - Graph rendering
+        - State search and navigation
+        - Neighborhood exploration
+        - Graph layouts
+        - State or transition inspector
+        - Graph analysis
+        - Import or export
+        - Performance and scalability
+        - Accessibility and usability
+        - Packaging and distribution
+        - API
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or limitation
+      description: Describe the user problem, limitation, or missing workflow. Explain why the current behavior is insufficient.
+      placeholder: |
+        When exploring a large reachability graph, I need to ...
+        The current application only allows ...
+        This makes it difficult to ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed capability
+      description: Describe the desired behavior from a user's perspective. Implementation details are optional.
+      placeholder: |
+        Add a control that allows users to ...
+        The result should display ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Example user workflow
+      description: Provide a short step-by-step example showing how the feature would be used.
+      placeholder: |
+        1. Open a PlantUML reachability graph.
+        2. Select state 42.
+        3. Choose ...
+        4. The dashboard shows ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: value
+    attributes:
+      label: Expected value
+      description: Explain who benefits and what task becomes easier, faster, safer, or more reliable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example input or mock-up
+      description: |
+        Add a minimal, publicly shareable PlantUML example, screenshot, sketch, or expected output when useful.
+        Do not include confidential models or token values.
+
+  - type: dropdown
+    id: graph-size
+    attributes:
+      label: Expected graph size
+      description: Select the graph size most relevant to the request.
+      options:
+        - Not graph-size dependent
+        - Fewer than 100 states
+        - 100 to 1,000 states
+        - 1,000 to 10,000 states
+        - More than 10,000 states
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: performance
+    attributes:
+      label: Performance considerations
+      description: Describe any expected effect on parsing time, browser rendering, memory use, or interaction with large graphs.
+      placeholder: The feature should remain responsive for approximately ... states and ... transitions.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any current workaround or alternative design you considered.
+
+  - type: dropdown
+    id: compatibility
+    attributes:
+      label: Compatibility impact
+      description: Could this change alter existing input formats, API responses, or user workflows?
+      options:
+        - No expected compatibility impact
+        - Backward-compatible extension
+        - May require a migration or breaking change
+        - Unknown
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution interest
+      options:
+        - label: I may be able to help implement this feature.
+        - label: I may be able to provide tests or example data.
+        - label: I may be able to review or validate the feature.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add any other information that would help evaluate the request.

@@ -1,0 +1,13 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/dbera/LTSVisualizer/security/advisories/new
+    about: Report suspected security vulnerabilities privately. Do not create a public issue.
+
+  - name: Project documentation
+    url: https://github.com/dbera/LTSVisualizer#readme
+    about: Read the installation, usage, input-format, and development documentation.
+
+  - name: Contribution guidelines
+    url: https://github.com/dbera/LTSVisualizer/blob/main/CONTRIBUTING.md
+    about: Review the development workflow and contribution requirements before submitting a pull request.
