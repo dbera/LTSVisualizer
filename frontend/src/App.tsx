@@ -15,8 +15,15 @@ import PathSelectionControls, {
 import {
   downloadPlantUmlPath,
   serializePathToPlantUml,
-  type SelectedPath,
 } from "./graph/pathExport";
+import {
+  extendPath,
+  getCandidateEdges,
+  resolvePath,
+  startPath,
+  undoPath,
+  type SelectedPath,
+} from "./graph/pathSelection";
 
 interface GraphNode {
   id: string;
@@ -199,11 +206,9 @@ function App() {
     );
     if (!path || !graph) return;
 
-    const selectedEdges = path.edgeIds
-      .map((edgeId) => graph.edges.find((edge) => edge.id === edgeId))
-      .filter((edge): edge is GraphEdge => edge !== undefined);
-    const nodeIds = [path.startNodeId, ...selectedEdges.map((edge) => edge.target)];
-    const endNodeId = nodeIds[nodeIds.length - 1];
+    const resolvedPath = resolvePath(graph, path);
+    const nodeIds = resolvedPath.nodeIds;
+    const endNodeId = resolvedPath.endNodeId;
     const selectedEdgeIds = new Set(path.edgeIds);
 
     cy.elements().addClass("path-dimmed");
@@ -222,8 +227,8 @@ function App() {
 
     cy.elements().unselect();
 
-    graph.edges
-      .filter((edge) => edge.source === endNodeId && !selectedEdgeIds.has(edge.id))
+    getCandidateEdges(graph, path)
+      .filter((edge) => !selectedEdgeIds.has(edge.id))
       .forEach((edge) => {
         cy.getElementById(edge.id)
           .removeClass("path-dimmed")
@@ -240,12 +245,11 @@ function App() {
     const cy = cyRef.current;
     if (!graph || !cy) return;
 
-    const selectedEdges = path.edgeIds
-      .map((edgeId) => graph.edges.find((edge) => edge.id === edgeId))
-      .filter((edge): edge is GraphEdge => edge !== undefined);
-    const pathNodeIds = [path.startNodeId, ...selectedEdges.map((edge) => edge.target)];
-    const endNodeId = pathNodeIds[pathNodeIds.length - 1];
-    const outgoingEdges = graph.edges.filter((edge) => edge.source === endNodeId);
+    const resolvedPath = resolvePath(graph, path);
+    const selectedEdges = resolvedPath.edges;
+    const pathNodeIds = resolvedPath.nodeIds;
+    const endNodeId = resolvedPath.endNodeId;
+    const outgoingEdges = getCandidateEdges(graph, path);
     const requiredNodeIds = new Set<string>(pathNodeIds);
     const requiredEdgeIds = new Set<string>([
       ...path.edgeIds,
@@ -335,7 +339,7 @@ function App() {
       return;
     }
 
-    const path = { startNodeId: startStateId, edgeIds: [] };
+    const path = startPath(graph, startStateId);
     updateSelectedPath(path);
     updatePathMode("select-edges");
     cyRef.current?.edges().forEach((edge) => {
@@ -352,25 +356,21 @@ function App() {
     const path = selectedPathRef.current;
     if (!graph || !path) return;
 
-    const selectedEdges = path.edgeIds
-      .map((id) => graph.edges.find((edge) => edge.id === id))
-      .filter((edge): edge is GraphEdge => edge !== undefined);
-    const endNodeId = selectedEdges.length
-      ? selectedEdges[selectedEdges.length - 1].target
-      : path.startNodeId;
-    const edge = graph.edges.find((candidate) => candidate.id === edgeId);
-
-    if (!edge || edge.source !== endNodeId) {
-      setStatus(`Select a highlighted transition or cyan target state from state ${endNodeId}`);
-      return;
+    try {
+      const nextPath = extendPath(graph, path, edgeId);
+      const resolvedPath = resolvePath(graph, nextPath);
+      updateSelectedPath(nextPath);
+      showPathContext(nextPath);
+      setStatus(
+        `Path selection: ${resolvedPath.stateCount} states and ${resolvedPath.transitionCount} transitions. Select a highlighted transition or cyan target state from state ${resolvedPath.endNodeId}.`
+      );
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Could not extend the selected path"
+      );
     }
-
-    const nextPath = { ...path, edgeIds: [...path.edgeIds, edge.id] };
-    updateSelectedPath(nextPath);
-    showPathContext(nextPath);
-    setStatus(
-      `Path selection: ${nextPath.edgeIds.length + 1} states and ${nextPath.edgeIds.length} transitions. Select a highlighted transition or cyan target state from state ${edge.target}.`
-    );
   }
 
   showPathContextRef.current = showPathContext;
@@ -379,7 +379,7 @@ function App() {
   function undoPathStep() {
     const path = selectedPathRef.current;
     if (!path || path.edgeIds.length === 0) return;
-    const nextPath = { ...path, edgeIds: path.edgeIds.slice(0, -1) };
+    const nextPath = undoPath(path);
     updateSelectedPath(nextPath);
     showPathContext(nextPath);
     setStatus("Removed the last path transition");
@@ -804,7 +804,9 @@ function App() {
       const info = makeNodeInspector(node);
 
       if (pathModeRef.current === "select-start") {
-        const path = { startNodeId: stateId, edgeIds: [] };
+        const graph = graphRef.current;
+        if (!graph) return;
+        const path = startPath(graph, stateId);
         updateSelectedPath(path);
         updatePathMode("select-edges");
         cyRef.current?.edges().forEach((edge) => {
@@ -819,14 +821,9 @@ function App() {
         const path = selectedPathRef.current;
 
         if (graph && path) {
-          const selectedEdges = path.edgeIds
-            .map((edgeId) => graph.edges.find((edge) => edge.id === edgeId))
-            .filter((edge): edge is GraphEdge => edge !== undefined);
-          const endNodeId = selectedEdges.length
-            ? selectedEdges[selectedEdges.length - 1].target
-            : path.startNodeId;
-          const matchingEdges = graph.edges.filter(
-            (edge) => edge.source === endNodeId && edge.target === stateId
+          const endNodeId = resolvePath(graph, path).endNodeId;
+          const matchingEdges = getCandidateEdges(graph, path).filter(
+            (edge) => edge.target === stateId
           );
 
           if (matchingEdges.length === 1) {
@@ -912,18 +909,25 @@ function App() {
   const selectedPathEdges = selectedPath?.edgeIds ?? [];
   const selectedPathEndNodeId = (() => {
     if (!selectedPath || !graphRef.current) return null;
-    const lastEdgeId = selectedPath.edgeIds[selectedPath.edgeIds.length - 1];
-    return lastEdgeId
-      ? graphRef.current.edges.find((edge) => edge.id === lastEdgeId)?.target ?? selectedPath.startNodeId
-      : selectedPath.startNodeId;
+    return resolvePath(graphRef.current, selectedPath).endNodeId;
   })();
   const pathSelectionActive = pathMode !== "idle";
   const pathCandidateEdges = (() => {
     const graph = graphRef.current;
-    if (!graph || pathMode !== "select-edges" || !selectedPathEndNodeId) return [];
-    return graph.edges
-      .filter((edge) => edge.source === selectedPathEndNodeId)
-      .map((edge) => ({ id: edge.id, transition: edge.transition, target: edge.target }));
+    if (
+      !graph ||
+      !selectedPath ||
+      pathMode !== "select-edges" ||
+      !selectedPathEndNodeId
+    ) {
+      return [];
+    }
+
+    return getCandidateEdges(graph, selectedPath).map((edge) => ({
+      id: edge.id,
+      transition: edge.transition,
+      target: edge.target,
+    }));
   })();
   return (
     <main className="app">
