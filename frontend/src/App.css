@@ -267,21 +267,6 @@ button.active {
   font-weight: 650;
 }
 
-.inspector pre {
-  margin: 12px 0 0;
-  padding: 13px;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
-  color: #334155;
-  font-family: Consolas, "Courier New", monospace;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .inspector-empty {
   padding: 8px 0;
   color: #64748b;
