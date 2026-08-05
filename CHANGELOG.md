@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-05
+
 ### Added
 
 - FastAPI backend for parsing and serving reachability-graph data.
@@ -90,4 +92,5 @@ After version `1.0.0`, use Semantic Versioning:
 - **MINOR** for backward-compatible functionality.
 - **PATCH** for backward-compatible fixes.
 
-[Unreleased]: https://github.com/dbera/LTSVisualizer/compare/main...HEAD
+[[Unreleased]: https://github.com/dbera/LTSVisualizer/compare/main...HEAD](https://github.com/dbera/LTSVisualizer/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/dbera/LTSVisualizer/releases/tag/v0.1.0)
