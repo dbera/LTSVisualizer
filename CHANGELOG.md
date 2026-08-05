@@ -6,6 +6,64 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Added **Export graph JSON** to export every node and transition in the complete loaded graph, independently of the currently visible neighborhood or selected path.
+- Added graph-level JSON metadata containing the source title, state count, and transition count.
+- Added safe filenames derived from the opened source filename for complete-graph JSON downloads.
+- Added unit-test coverage for complete-graph JSON round trips, parallel transitions, state markings, transition inputs, raw semantic values, and transition colors.
+- Added documentation for complete-graph JSON export and the backend-independent PlantUML-to-JSON workflow.
+
+### Changed
+
+- Updated complete graph JSON serialization to include `stateCount` and `transitionCount` metadata automatically.
+- Updated the frontend toolbar with a graph-level JSON export action separate from selected-path export.
+- Updated the README architecture, verification checklist, limitations, and roadmap after completing full-graph JSON export.
+
+## [0.3.0] - 2026-08-05
+
+### Added
+
+- Added manual path selection starting from the currently focused state.
+- Added path extension through highlighted successor states and explicit **Choose next transition** controls.
+- Added exact edge selection by unique edge ID for parallel and identically named transitions.
+- Added support for loops, repeated states, and repeated transition traversals.
+- Added **Undo**, **Restart path**, and **Clear path** controls.
+- Added selected-path highlighting with distinct start, path, endpoint, and candidate colors.
+- Added PlantUML export for selected paths.
+- Added JSON import for complete LTS graphs directly in the browser.
+- Added JSON export for selected paths as self-contained graph subsets.
+- Added a versioned LTSVisualizer JSON document format for full graphs and selected paths.
+- Added JSON graph validation for document structure, node IDs, edge IDs, source and target references, semantic fields, and selected-path connectivity.
+- Added support for lightweight JSON graph documents without the optional LTSVisualizer format envelope.
+- Added preservation of state markings, raw markings, transition inputs, raw inputs, transition colors, labels, and exact edge identities in JSON workflows.
+- Added frontend-only JSON operation without requiring the FastAPI backend.
+- Added unit tests for manual path selection, loops, repeated states, candidate transitions, parallel edges, path validation, JSON parsing, JSON validation, serialization, and round trips.
+
+### Changed
+
+- Renamed the file-open action from **Open PlantUML file** to **Open LTS Graph File**.
+- Extended the file picker to accept `.json`, `.puml`, `.plantuml`, and compatible `.txt` files.
+- Changed JSON loading to parse and validate files locally in the frontend instead of sending them to FastAPI.
+- Kept PlantUML loading through the FastAPI backend for compatibility with the existing parser.
+- Changed reopened selected-path JSON files to load as regular graphs so search, neighborhood, layout, label, and **Show all** controls remain available.
+- Distinguished unique graph nodes and edges from repeated state occurrences and transition steps in saved traversals.
+- Extracted manual path-selection rules into a reusable, independently tested TypeScript module.
+- Updated path candidate generation, endpoint resolution, extension, undo, and validation to use the shared path-selection module.
+- Kept transition labels visible during path construction.
+- Preserved node dragging, canvas panning, zooming, inspection, and manually adjusted positions during path selection.
+
+### Fixed
+
+- Fixed Cytoscape pointer and hit-detection offsets after the path controls changed the graph container position.
+- Fixed node dragging becoming unavailable during path-selection mode.
+- Fixed path visualization relayouts that caused selected graphs to jump or grow in unexpected directions.
+- Fixed stale unselected branches remaining visible after choosing a path continuation.
+- Fixed TypeScript null narrowing around selected-path candidate generation.
+- Fixed JSON parser handling of lightweight selected-path documents that specify `type` without `format` and `version`.
+- Fixed a build failure caused by an unused test import.
+- Fixed reopened selected-path JSON files being locked in active path-selection mode with exploration controls disabled.
+
 ## [0.2.0] - 2026-08-05
 
 ### Added
@@ -145,7 +203,7 @@ When preparing a release:
 Example:
 
 ```text
-## [0.2.1] - 2026-08-05
+## [0.3.1] - 2026-08-05
 ```
 
 ## Versioning guidance
@@ -162,7 +220,8 @@ After version `1.0.0`, use Semantic Versioning:
 - **MINOR** for backward-compatible functionality.
 - **PATCH** for backward-compatible fixes.
 
-[Unreleased]: https://github.com/dbera/LTSVisualizer/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/dbera/LTSVisualizer/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/dbera/LTSVisualizer/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dbera/LTSVisualizer/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/dbera/LTSVisualizer/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/dbera/LTSVisualizer/releases/tag/v0.1.0
