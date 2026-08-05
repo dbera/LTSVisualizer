@@ -2,9 +2,47 @@
 
 All notable changes to LTSVisualizer will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project intends to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) after the first public release.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.1.1] - 2026-08-05
+
+### Added
+
+- Added a combined production mode in which FastAPI serves both the built React frontend and the graph API.
+- Added `backend/launcher.py` to start the local application server, select an available port, and open the dashboard in the default browser.
+- Added `LTSVisualizer.spec` for reproducible Windows packaging with PyInstaller.
+- Added an automated Windows release workflow using GitHub Actions.
+- Added automatic creation of `LTSVisualizer-Windows-x64.zip` and `SHA256SUMS.txt` for tagged releases.
+- Added directly testable Windows workflow artifacts for manually triggered release builds.
+- Added Windows binary download, checksum verification, ZIP unblocking, and SmartScreen guidance to the README.
+- Added developer documentation for development mode, combined production mode, local Windows packaging, and automated GitHub Releases.
+
+### Changed
+
+- Changed the frontend upload endpoint to the relative path `/graph/upload`.
+- Added a Vite development proxy that forwards `/graph` requests to the FastAPI backend on port `8000`.
+- Changed the production architecture so the React frontend and API are served from one local FastAPI and Uvicorn process.
+- Updated application resource handling to locate bundled frontend assets and sample data inside a PyInstaller package.
+- Updated the Windows release workflow so manual test artifacts extract directly to `LTSVisualizer.exe` and `_internal` without an additional application ZIP layer.
+- Updated the project structure, API, testing, packaging, and release documentation.
+- Moved the health endpoint to `GET /api/health`.
+
+### Fixed
+
+- Fixed frontend and sample-data paths when running from a PyInstaller bundle.
+- Fixed Uvicorn startup in the packaged executable by passing the FastAPI application object directly to Uvicorn.
+- Fixed confusing nested packaging in manually downloaded GitHub Actions artifacts.
+- Fixed outdated README instructions that only described the separate Vite and FastAPI development servers.
+- Fixed malformed changelog comparison links.
+
+### Security
+
+- Added SHA-256 checksum generation for Windows release ZIP files.
+- Documented checksum verification before running downloaded binaries.
+- Documented the Windows `Unblock-File` procedure for ZIP files downloaded from the official GitHub Release.
+- Documented that the current Windows executable is unsigned and may trigger Microsoft Defender SmartScreen.
 
 ## [0.1.0] - 2026-08-05
 
@@ -69,20 +107,21 @@ When preparing a release:
 2. Add the release date in `YYYY-MM-DD` format.
 3. Update version references in project metadata when applicable.
 4. Run backend tests and frontend checks.
-5. Create an annotated Git tag.
-6. Publish a GitHub Release containing installation and upgrade notes.
+5. Verify the Windows package locally or through a manually triggered release workflow.
+6. Create and push an annotated Git tag.
+7. Confirm that the tag-triggered workflow publishes the GitHub Release and its binary assets.
 
 Example:
 
 ```text
-## [0.1.0] - 2026-08-05
+## [0.1.2] - 2026-08-05
 ```
 
 ## Versioning guidance
 
 Until the project reaches version `1.0.0`:
 
-- Increment the patch version for compatible fixes and documentation updates.
+- Increment the patch version for compatible fixes, packaging changes, and documentation updates.
 - Increment the minor version for new features or meaningful parser and UI changes.
 - Clearly document breaking changes, even during the `0.x` development period.
 
@@ -92,5 +131,6 @@ After version `1.0.0`, use Semantic Versioning:
 - **MINOR** for backward-compatible functionality.
 - **PATCH** for backward-compatible fixes.
 
-[[Unreleased]: https://github.com/dbera/LTSVisualizer/compare/main...HEAD](https://github.com/dbera/LTSVisualizer/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/dbera/LTSVisualizer/releases/tag/v0.1.0)
+[Unreleased]: https://github.com/dbera/LTSVisualizer/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/dbera/LTSVisualizer/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/dbera/LTSVisualizer/releases/tag/v0.1.0
