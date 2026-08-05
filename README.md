@@ -1,6 +1,7 @@
 # LTSVisualizer
 
 An interactive web application for exploring large labelled transition systems and reachability graphs described in PlantUML format.
+<img width="2873" height="1743" alt="image" src="https://github.com/user-attachments/assets/43179c21-0d39-4991-bb11-10d8a188227a" />
 
 LTSVisualizer was created primarily for reachability graphs generated from Colored Petri Nets, where:
 
