@@ -8,6 +8,7 @@ import {
 import axios from "axios";
 import cytoscape from "cytoscape";
 import "./App.css";
+import JsonViewer, { type JsonValue } from "./components/JsonViewer";
 
 interface GraphNode {
   id: string;
@@ -36,10 +37,10 @@ interface InspectorInfo {
   type: "node" | "edge";
   title: string;
   subtitle?: string;
-  content: string;
+  data: JsonValue;
 }
 
-// const API_URL = "http://127.0.0.1:8000/graph/upload";
+//const API_URL = "http://127.0.0.1:8000/graph/upload";
 const API_URL = "/graph/upload";
 
 function App() {
@@ -63,28 +64,24 @@ function App() {
   const [pinnedInspector, setPinnedInspector] = useState<InspectorInfo | null>(null);
 
   function makeNodeInspector(node: cytoscape.NodeSingular): InspectorInfo {
-    const marking = node.data("marking");
+    const marking = node.data("marking") as JsonValue | null | undefined;
 
     return {
       type: "node",
       title: `State ${node.id()}`,
       subtitle: "Marking",
-      content: marking
-        ? JSON.stringify(marking, null, 2)
-        : "No marking data available",
+      data: marking ?? "No marking data available",
     };
   }
 
   function makeEdgeInspector(edge: cytoscape.EdgeSingular): InspectorInfo {
-    const inputs = edge.data("inputs");
+    const inputs = edge.data("inputs") as JsonValue | null | undefined;
 
     return {
       type: "edge",
       title: edge.data("transition") ?? "Transition",
       subtitle: `${edge.source().id()} -> ${edge.target().id()}`,
-      content: inputs
-        ? JSON.stringify(inputs, null, 2)
-        : "No transition input data available",
+      data: inputs ?? "No transition input data available",
     };
   }
 
@@ -647,7 +644,11 @@ function App() {
               {visibleInspector.subtitle && (
                 <p className="inspector-subtitle">{visibleInspector.subtitle}</p>
               )}
-              <pre>{visibleInspector.content}</pre>
+              <JsonViewer
+                key={`${visibleInspector.type}-${visibleInspector.title}`}
+                value={visibleInspector.data}
+                label={`${visibleInspector.title} ${visibleInspector.subtitle ?? "data"}`}
+              />
               <p className="inspector-tip">
                 {pinnedInspector
                   ? "This item is pinned. Select Clear to resume hover inspection."
