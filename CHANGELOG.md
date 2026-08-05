@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Added syntax-colored structured JSON rendering for state markings and transition inputs.
+- Added individual expand-and-collapse controls for inspector objects and arrays.
+- Added global **Expand all** and **Collapse all** controls.
+- Added collection-size summaries for collapsed arrays and objects.
+- Added clear indicators for empty arrays and objects.
+- Added a **Copy JSON** action with temporary success and failure feedback.
+- Added distinct colors for JSON keys, strings, numbers, booleans, null values, and punctuation.
+- Added responsive JSON-viewer controls for narrow browser windows.
+
+### Changed
+
+- Changed the inspector to retain and render structured values instead of displaying preformatted JSON text.
+- Improved the readability and navigation of deeply nested state markings and transition inputs.
+- Limited the initial expansion depth so large nested values remain manageable.
+- Reset JSON-viewer expansion state when a different state or transition is selected.
+- Kept the frontend upload endpoint relative as `/graph/upload` so development proxy mode and combined production mode use the same frontend bundle.
+
+### Fixed
+
+- Fixed the combined production frontend after an obsolete hardcoded `http://127.0.0.1:8000/graph/upload` endpoint was detected in the generated JavaScript bundle.
+- Fixed production graph uploads by restoring the relative `/graph/upload` endpoint and rebuilding the frontend assets.
+- Removed obsolete inspector styling that targeted the previous plain `<pre>` representation.
+
 ## [0.1.1] - 2026-08-05
 
 ### Added
@@ -114,7 +139,7 @@ When preparing a release:
 Example:
 
 ```text
-## [0.1.2] - 2026-08-05
+## [0.2.0] - 2026-08-05
 ```
 
 ## Versioning guidance
