@@ -67,6 +67,19 @@ The comments are optional. A file containing only nodes, edges, and transition l
 - Cytoscape.js
 - Axios
 
+## Download for Windows
+
+Download the latest portable Windows release from:
+
+https://github.com/dbera/LTSVisualizer/releases/latest
+
+1. Download `LTSVisualizer-Windows-x64.zip`.
+2. Extract the complete ZIP.
+3. Run `LTSVisualizer.exe`.
+4. Keep the `_internal` folder beside the executable.
+
+Python, Node.js, npm, and a development environment are not required.
+
 ## Project structure
 
 ```text
