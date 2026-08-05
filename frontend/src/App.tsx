@@ -25,6 +25,7 @@ import {
   type SelectedPath,
 } from "./graph/pathSelection";
 import {
+  createGraphJsonDocument,
   createSelectedPathJsonDocument,
   parseGraphJsonText,
   serializeGraphJson,
@@ -419,6 +420,41 @@ function App() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  }
+
+  function exportFullGraphJson() {
+    const graph = graphRef.current;
+    if (!graph) {
+      setStatus("Open an LTS graph before exporting");
+      return;
+    }
+
+    try {
+      const sourceName = fileName.replace(/\.[^.]+$/, "") || "graph";
+      const safeName = sourceName
+        .replace(/[^a-zA-Z0-9._-]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "graph";
+      const document = createGraphJsonDocument(graph, {
+        title: sourceName,
+      });
+      const exportFileName = `${safeName}.json`;
+
+      downloadTextFile(
+        serializeGraphJson(document),
+        exportFileName,
+        "application/json;charset=utf-8"
+      );
+      setStatus(
+        `Exported ${exportFileName}: ${graph.nodes.length} states and ${graph.edges.length} transitions`
+      );
+    } catch (error) {
+      console.error(error);
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Could not export the complete graph as JSON"
+      );
+    }
   }
 
   function exportSelectedPath() {
@@ -1107,6 +1143,16 @@ function App() {
         >
           Show all
         </button>
+
+        <button
+          type="button"
+          onClick={exportFullGraphJson}
+          disabled={!graphLoaded}
+          title="Export every node and transition in the loaded graph"
+        >
+          Export graph JSON
+        </button>
+
         <PathSelectionControls
           graphLoaded={graphLoaded}
           mode={pathMode}

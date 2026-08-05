@@ -304,7 +304,11 @@ export function createGraphJsonDocument(
     format: "ltsvisualizer",
     version: 1,
     type: "graph",
-    ...(metadata ? { metadata } : {}),
+    metadata: {
+      ...(metadata ?? {}),
+      stateCount: graph.nodes.length,
+      transitionCount: graph.edges.length,
+    },
     nodes: graph.nodes,
     edges: graph.edges,
   }).document as GraphJsonDocument;

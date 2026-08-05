@@ -261,7 +261,24 @@ describe("serialization and round trips", () => {
     const document = createGraphJsonDocument(graph, { title: "Graph" });
     const reparsed = parseGraphJsonText(serializeGraphJson(document));
     expect(reparsed.graph).toEqual(graph);
-    expect(reparsed.document.metadata?.title).toBe("Graph");
+    expect(reparsed.document.metadata).toMatchObject({
+      title: "Graph",
+      stateCount: 3,
+      transitionCount: 4,
+    });
+  });
+
+  it("preserves every node, edge, parallel transition, and semantic field", () => {
+    const document = createGraphJsonDocument(graph);
+    const reparsed = parseGraphJsonText(serializeGraphJson(document));
+
+    expect(reparsed.graph.nodes).toEqual(graph.nodes);
+    expect(reparsed.graph.edges).toEqual(graph.edges);
+    expect(reparsed.graph.edges.filter((edge) => edge.source === "0" && edge.target === "1"))
+      .toEqual([graph.edges[0], graph.edges[1]]);
+    expect(reparsed.graph.nodes[0].marking_raw).toBe("{input={}}");
+    expect(reparsed.graph.edges[0].inputs).toEqual({ request: { id: 42 } });
+    expect(reparsed.graph.edges[1].color).toBe("darkorange");
   });
 
   it("creates a self-contained selected-path subset", () => {
