@@ -17,11 +17,12 @@ interface PathSelectionControlsProps {
   onUndo: () => void;
   onClear: () => void;
   onExport: () => void;
+  onExportJson: () => void;
   onSelectCandidate: (edgeId: string) => void;
 }
 export default function PathSelectionControls({
   graphLoaded, mode, startNodeId, endNodeId, edgeCount, candidates,
-  onStart, onUndo, onClear, onExport, onSelectCandidate,
+  onStart, onUndo, onClear, onExport, onExportJson, onSelectCandidate,
 }: PathSelectionControlsProps) {
   const active = mode !== "idle";
   const stateCount = startNodeId ? edgeCount + 1 : 0;
@@ -35,6 +36,7 @@ export default function PathSelectionControls({
         <button type="button" onClick={onUndo} disabled={!startNodeId || edgeCount === 0}>Undo</button>
         <button type="button" onClick={onClear} disabled={!active && !startNodeId}>Clear path</button>
         <button type="button" className="path-export-button" onClick={onExport} disabled={!startNodeId}>Export .puml</button>
+        <button type="button" className="path-export-button" onClick={onExportJson} disabled={!startNodeId}>Export .json</button>
         {active && <span className="path-summary" aria-live="polite">
           {mode === "select-start" ? "Select a start state" : `${stateCount} state${stateCount === 1 ? "" : "s"}, ${edgeCount} transition${edgeCount === 1 ? "" : "s"}${endNodeId ? `, at ${endNodeId}` : ""}`}
         </span>}

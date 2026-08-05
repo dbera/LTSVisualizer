@@ -24,6 +24,11 @@ import {
   undoPath,
   type SelectedPath,
 } from "./graph/pathSelection";
+import {
+  createSelectedPathJsonDocument,
+  parseGraphJsonText,
+  serializeGraphJson,
+} from "./graph/graphJson";
 
 interface GraphNode {
   id: string;
@@ -68,7 +73,7 @@ function App() {
   const showPathContextRef = useRef<(path: SelectedPath) => void>(() => {});
   const addEdgeToPathRef = useRef<(edgeId: string) => void>(() => {});
 
-  const [status, setStatus] = useState("Select a PlantUML file to begin");
+  const [status, setStatus] = useState("Select an LTS graph file to begin");
   const [fileName, setFileName] = useState("");
   const [graphLoaded, setGraphLoaded] = useState(false);
   const [searchText, setSearchText] = useState("");
@@ -400,6 +405,22 @@ function App() {
     }
   }
 
+  function downloadTextFile(
+    content: string,
+    fileName: string,
+    mimeType: string
+  ) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function exportSelectedPath() {
     const graph = graphRef.current;
     const path = selectedPathRef.current;
@@ -414,6 +435,36 @@ function App() {
     } catch (error) {
       console.error(error);
       setStatus(error instanceof Error ? error.message : "Could not export the selected path");
+    }
+  }
+
+  function exportSelectedPathJson() {
+    const graph = graphRef.current;
+    const path = selectedPathRef.current;
+    if (!graph || !path) {
+      setStatus("Select a path before exporting");
+      return;
+    }
+
+    try {
+      const resolved = resolvePath(graph, path);
+      const document = createSelectedPathJsonDocument(graph, path, {
+        title: `Selected path ${resolved.startNodeId} to ${resolved.endNodeId}`,
+      });
+      const fileName = `LTSVisualizer-path-${resolved.startNodeId}-to-${resolved.endNodeId}.json`;
+      downloadTextFile(
+        serializeGraphJson(document),
+        fileName,
+        "application/json;charset=utf-8"
+      );
+      setStatus(`Exported ${fileName}`);
+    } catch (error) {
+      console.error(error);
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Could not export the selected path as JSON"
+      );
     }
   }
 
@@ -589,19 +640,50 @@ function App() {
     updateSelectedPath(null);
     updatePathMode("idle");
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
-      const response = await axios.post<GraphData>(API_URL, formData);
-      const graph = response.data;
+      const isJsonFile = file.name.toLowerCase().endsWith(".json");
+      let graph: GraphData;
+      let importedPath: SelectedPath | null = null;
+
+      if (isJsonFile) {
+        const parsed = parseGraphJsonText(await file.text());
+        graph = parsed.graph;
+        importedPath = parsed.selectedPath;
+      } else {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await axios.post<GraphData>(API_URL, formData);
+        graph = response.data;
+      }
 
       graphRef.current = graph;
       setGraphLoaded(true);
       setShowTransitionLabels(graph.nodes.length <= 300);
 
       if (graph.nodes.length === 0) {
+        setGraphLoaded(false);
         setStatus("The selected file contains no graph nodes");
+        return;
+      }
+
+      if (importedPath) {
+        const resolved = resolvePath(graph, importedPath);
+        const allNodeIds = new Set(graph.nodes.map((node) => node.id));
+
+        updateSelectedPath(null);
+        updatePathMode("idle");
+        setShowTransitionLabels(true);
+        replaceVisibleGraph(
+          buildElements(graph, allNodeIds, graph.edges, true),
+          "breadthfirst"
+        );
+        setSelectedStateId(importedPath.startNodeId);
+        setSearchText(importedPath.startNodeId);
+        setShowingAll(true);
+        setOverviewLayout("hierarchical");
+        setStatus(
+          `Loaded ${file.name} as a regular graph: ${graph.nodes.length} unique states and ${graph.edges.length} unique transitions. The saved traversal contains ${resolved.stateCount} state occurrences and ${resolved.transitionCount} transition steps, ending at state ${resolved.endNodeId}.`
+        );
         return;
       }
 
@@ -626,6 +708,8 @@ function App() {
         } else {
           setStatus(`Could not load ${file.name}`);
         }
+      } else if (error instanceof Error) {
+        setStatus(error.message);
       } else {
         setStatus(`Could not load ${file.name}`);
       }
@@ -942,7 +1026,7 @@ function App() {
           <input
             ref={fileInput}
             type="file"
-            accept=".puml,.plantuml,.txt"
+            accept=".puml,.plantuml,.txt,.json"
             className="file-input"
             onChange={handleFileSelected}
           />
@@ -951,7 +1035,7 @@ function App() {
             className="primary-button"
             onClick={() => fileInput.current?.click()}
           >
-            Open PlantUML file
+            Open LTS Graph File
           </button>
         </div>
       </header>
@@ -1033,6 +1117,7 @@ function App() {
           onUndo={undoPathStep}
           onClear={clearPathSelection}
           onExport={exportSelectedPath}
+          onExportJson={exportSelectedPathJson}
           candidates={pathCandidateEdges}
           onSelectCandidate={addEdgeToPath}
         />
