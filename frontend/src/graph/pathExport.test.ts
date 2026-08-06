@@ -33,6 +33,8 @@ const graph: ExportGraphData = {
       color: null,
       inputs_raw: `{request -> '{"id": 42}'}`,
       inputs: { request: { id: 42 } },
+      outputs_raw: `{processing={'{"id": 42, "active": true}'}}`,
+      outputs: { processing: [{ id: 42, active: true }] },
     },
     {
       id: "edge-1",
@@ -42,6 +44,8 @@ const graph: ExportGraphData = {
       color: "darkorange",
       inputs_raw: null,
       inputs: { activeRequest: { id: 42, active: true } },
+      outputs_raw: null,
+      outputs: { output: [{ id: 42, status: "complete" }] },
     },
     {
       id: "edge-2",
@@ -51,6 +55,8 @@ const graph: ExportGraphData = {
       color: null,
       inputs_raw: null,
       inputs: null,
+      outputs_raw: "{}",
+      outputs: {},
     },
     {
       id: "edge-parallel",
@@ -60,6 +66,8 @@ const graph: ExportGraphData = {
       color: "#darkorange",
       inputs_raw: null,
       inputs: null,
+      outputs_raw: null,
+      outputs: null,
     },
   ],
 };
@@ -122,6 +130,12 @@ describe("serializePathToPlantUml", () => {
       `'Transition Inputs: {request -> '{"id": 42}'}`
     );
     expect(result.content).toContain(
+      `'Transition Outputs: {processing={'{"id": 42, "active": true}'}}`
+    );
+    expect(result.content).toContain(
+      `'Transition Outputs: {output={'{"id":42,"status":"complete"}'}}`
+    );
+    expect(result.content).toContain(
       `'Marking (State): {input={'{"id": 42}'}}`
     );
     expect(result.content).toContain(
@@ -150,6 +164,24 @@ describe("serializePathToPlantUml", () => {
     expect(result.content).toContain(
       "title Selected path: 1 state and 0 transitions"
     );
+  });
+
+  it("exports a known empty output flow", () => {
+    const result = serializePathToPlantUml(graph, {
+      startNodeId: "0",
+      edgeIds: ["edge-0", "edge-2"],
+    });
+
+    expect(result.content).toContain("'Transition Outputs: {}");
+  });
+
+  it("omits transition outputs when output data is unavailable", () => {
+    const result = serializePathToPlantUml(graph, {
+      startNodeId: "0",
+      edgeIds: ["edge-parallel"],
+    });
+
+    expect(result.content).not.toContain("'Transition Outputs:");
   });
 
   it("normalizes a color that already contains a hash", () => {

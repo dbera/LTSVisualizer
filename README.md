@@ -9,6 +9,7 @@ LTSVisualizer was created primarily for reachability graphs generated from Color
 - **Nodes** represent markings or states.
 - **Edges** represent fired transitions.
 - **Transition inputs** describe the data consumed by a transition.
+- **Transition outputs** describe the tokens produced by a transition, grouped by output place.
 - **State markings** describe the distribution of tokens across Petri-net places.
 
 The application uses a React and Cytoscape.js frontend for visualization. An optional Python and FastAPI backend parses PlantUML graph files.
@@ -25,9 +26,9 @@ LTSVisualizer supports small linear graphs and large cyclic state spaces contain
 - Open `.puml`, `.plantuml`, and compatible PlantUML `.txt` files through the FastAPI backend.
 - Validate JSON graph structure, node IDs, edge IDs, references, and saved paths.
 - Preserve transition colors such as `#darkorange`.
-- Preserve structured transition-input data.
+- Preserve structured transition-input and transition-output data.
 - Preserve structured state markings and token values.
-- Preserve raw transition inputs and raw state markings when available.
+- Preserve raw transition inputs, raw transition outputs, and raw state markings when available.
 - Export the complete loaded graph as JSON for later frontend-only use.
 
 ### Graph exploration
@@ -43,7 +44,8 @@ LTSVisualizer supports small linear graphs and large cyclic state spaces contain
 ### Inspection
 
 - Inspect state markings by hovering over or selecting states.
-- Inspect consumed transition-input data by hovering over or selecting transitions.
+- Inspect consumed transition inputs and produced transition outputs by hovering over or selecting transitions.
+- Inspect both structured and raw transition semantic data through the JSON viewer.
 - Pin inspector content while continuing to explore the graph.
 - Clear pinned inspector content without clearing a selected path.
 
@@ -66,7 +68,7 @@ LTSVisualizer supports small linear graphs and large cyclic state spaces contain
 - Preserve exact transition order.
 - Preserve loops and repeated transition traversals.
 - Preserve parallel-edge identity.
-- Preserve state markings, transition inputs, labels, and colors.
+- Preserve state markings, transition inputs, transition outputs, labels, and colors.
 - Reopen exported PlantUML paths.
 - Reopen exported JSON as a regular graph.
 
@@ -170,7 +172,7 @@ The FastAPI backend is not required for:
 
 - Opening JSON graphs
 - Exploring graphs
-- Inspecting markings and transition inputs
+- Inspecting markings, transition inputs, and transition outputs
 - Selecting paths
 - Exporting the complete graph as JSON
 - Exporting selected paths as JSON
@@ -252,6 +254,14 @@ A complete graph document has this structure:
         "request": {
           "id": 42
         }
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "processing": [
+          {
+            "id": 42
+          }
+        ]
       }
     }
   ]
@@ -291,8 +301,10 @@ Each edge contains:
 - `target`: Target node ID.
 - `transition`: Transition name.
 - `color`: Optional transition color.
-- `inputs`: Optional structured transition-input data.
+- `inputs`: Optional structured transition-input bindings.
 - `inputs_raw`: Optional original transition-input text.
+- `outputs`: Optional structured transition-output flow. Each key is an output place and each value is an array of produced tokens.
+- `outputs_raw`: Optional original transition-output text.
 
 Example:
 
@@ -308,6 +320,14 @@ Example:
     "request": {
       "id": 100
     }
+  },
+  "outputs_raw": "{completed={'{\"id\": 100}'}}",
+  "outputs": {
+    "completed": [
+      {
+        "id": 100
+      }
+    ]
   }
 }
 ```
@@ -315,6 +335,16 @@ Example:
 The edge ID identifies the exact edge. Connectivity is represented separately by `source` and `target`.
 
 This allows LTSVisualizer to distinguish parallel edges, including multiple transitions with identical source, target, and transition names.
+
+`outputs` represents the tokens produced by the transition firing, not the complete target-state marking. Token order and duplicate token occurrences are preserved in the arrays.
+
+Missing and explicitly empty output data have different meanings:
+
+- `"outputs": null` means that transition-output information was not supplied, as in older JSON documents.
+- `"outputs": {}` means that the output flow was supplied and is known to be empty.
+- The same distinction applies to `outputs_raw`: `null` means unavailable, while `"{}"` is a known empty raw output flow.
+
+Older JSON files that omit `outputs` and `outputs_raw` remain supported. The parser normalizes omitted optional fields to `null`.
 
 ### Lightweight graph documents
 
@@ -381,7 +411,9 @@ A selected-path JSON export contains a self-contained graph subset and an ordere
       "transition": "Start",
       "color": null,
       "inputs_raw": null,
-      "inputs": null
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
     }
   ],
   "path": {
@@ -447,7 +479,7 @@ When an exported selected-path JSON file is reopened, LTSVisualizer loads the co
 3. Use **Show all** to display the complete graph.
 4. Switch between **Hierarchical** and **Grid** layouts.
 5. Toggle transition labels for readability and performance.
-6. Hover over graph elements to inspect semantic data.
+6. Hover over graph elements to inspect state markings or transition inputs and outputs.
 7. Select a state or transition to pin its data in the inspector.
 8. Drag states to adjust their positions.
 9. Drag the background to pan.
@@ -522,6 +554,16 @@ The export preserves:
 - Transition colors
 - State markings
 - Transition inputs
+- Transition outputs
+- Raw transition inputs and outputs when available
+
+For transitions with available output information, the PlantUML path contains a machine-readable comment without changing the rendered diagram:
+
+```plantuml
+'Transition Outputs: {completed={'{"id": 100}'}}
+```
+
+A known empty output flow is exported as `'Transition Outputs: {}`. The comment is omitted for older graphs where output information is unavailable.
 
 ### JSON path export
 
@@ -534,8 +576,8 @@ The export preserves:
 - Loops and repeated traversals
 - Parallel-edge identity
 - State markings
-- Transition inputs
-- Raw semantic values
+- Transition inputs and outputs
+- Raw markings, inputs, and outputs
 - Transition colors
 
 Exported JSON files can be reopened without running the backend.
@@ -558,6 +600,7 @@ The generated JSON preserves:
 - Parallel edges
 - State markings and raw markings
 - Transition inputs and raw inputs
+- Transition outputs and raw outputs
 - Transition labels
 - Transition colors
 - Graph state and transition counts
@@ -991,8 +1034,11 @@ Before packaging or releasing:
 14. Focus a small neighborhood and export the complete loaded graph as JSON.
 15. Stop the backend and reopen the complete graph JSON.
 16. Confirm that states outside the previously visible neighborhood are available.
-17. Confirm that markings, transition inputs, colors, and parallel edges are preserved.
-18. Confirm there are no browser-console errors.
+17. Confirm that markings, transition inputs, transition outputs, raw semantic values, colors, and parallel edges are preserved.
+18. Inspect a transition and confirm that `inputs`, `inputs_raw`, `outputs`, and `outputs_raw` are available.
+19. Export a selected path as PlantUML and confirm that available transition outputs appear as `'Transition Outputs:` comments.
+20. Confirm that known empty outputs remain `{}` and unavailable outputs remain `null` or are omitted from PlantUML comments.
+21. Confirm there are no browser-console errors.
 
 ## Build the Windows application locally
 
