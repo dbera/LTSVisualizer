@@ -45,6 +45,8 @@ interface GraphEdge {
   color: string | null;
   inputs_raw: string | null;
   inputs: Record<string, unknown> | null;
+  outputs_raw: string | null;
+  outputs: Record<string, unknown[]> | null;
 }
 
 interface GraphData {
@@ -112,12 +114,20 @@ function App() {
 
   function makeEdgeInspector(edge: cytoscape.EdgeSingular): InspectorInfo {
     const inputs = edge.data("inputs") as JsonValue | null | undefined;
+    const inputsRaw = edge.data("inputs_raw") as string | null | undefined;
+    const outputs = edge.data("outputs") as JsonValue | null | undefined;
+    const outputsRaw = edge.data("outputs_raw") as string | null | undefined;
 
     return {
       type: "edge",
       title: edge.data("transition") ?? "Transition",
       subtitle: `${edge.source().id()} -> ${edge.target().id()}`,
-      data: inputs ?? "No transition input data available",
+      data: {
+        inputs: inputs ?? "No transition input data available",
+        inputs_raw: inputsRaw ?? "No raw transition input data available",
+        outputs: outputs ?? "No transition output data available",
+        outputs_raw: outputsRaw ?? "No raw transition output data available",
+      },
     };
   }
 
@@ -150,6 +160,9 @@ function App() {
           label: showLabels ? edge.transition : "",
           transition: edge.transition,
           inputs: edge.inputs,
+          inputs_raw: edge.inputs_raw,
+          outputs: edge.outputs,
+          outputs_raw: edge.outputs_raw,
           lineColor:
             edge.color === "darkorange" ? "#f59e0b" : "#64748b",
         },
@@ -1208,7 +1221,7 @@ function App() {
               <div className={`inspector-type ${visibleInspector.type}`}>
                 {visibleInspector.type === "node"
                   ? "STATE MARKING"
-                  : "TRANSITION INPUTS"}
+                  : "TRANSITION DATA"}
               </div>
               {visibleInspector.subtitle && (
                 <p className="inspector-subtitle">{visibleInspector.subtitle}</p>

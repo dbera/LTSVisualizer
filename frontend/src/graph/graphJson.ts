@@ -16,6 +16,8 @@ export interface JsonGraphEdge extends PathEdge {
   color: string | null;
   inputs_raw: string | null;
   inputs: Record<string, unknown> | null;
+  outputs_raw: string | null;
+  outputs: Record<string, unknown[]> | null;
 }
 
 export interface JsonGraphData {
@@ -137,6 +139,20 @@ function parseNode(value: unknown, index: number): JsonGraphNode {
 
 function parseEdge(value: unknown, index: number): JsonGraphEdge {
   const edge = requireObject(value, `edges[${index}]`);
+  const outputs = optionalNullableObject(
+    edge.outputs,
+    `edges[${index}].outputs`
+  );
+
+  if (outputs) {
+    Object.entries(outputs).forEach(([place, tokens]) => {
+      if (!Array.isArray(tokens)) {
+        throw new GraphJsonError(
+          `edges[${index}].outputs.${place} must be an array.`
+        );
+      }
+    });
+  }
 
   return {
     id: requireString(edge.id, `edges[${index}].id`),
@@ -152,6 +168,11 @@ function parseEdge(value: unknown, index: number): JsonGraphEdge {
       `edges[${index}].inputs_raw`
     ),
     inputs: optionalNullableObject(edge.inputs, `edges[${index}].inputs`),
+    outputs_raw: optionalNullableString(
+      edge.outputs_raw,
+      `edges[${index}].outputs_raw`
+    ),
+    outputs: outputs as Record<string, unknown[]> | null,
   };
 }
 

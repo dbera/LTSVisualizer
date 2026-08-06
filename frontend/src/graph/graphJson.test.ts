@@ -23,6 +23,8 @@ const graph: JsonGraphData = {
       color: null,
       inputs_raw: null,
       inputs: { request: { id: 42 } },
+      outputs_raw: "{processing={'{\"id\": 42}'}}",
+      outputs: { processing: [{ id: 42 }] },
     },
     {
       id: "e01b",
@@ -32,6 +34,8 @@ const graph: JsonGraphData = {
       color: "darkorange",
       inputs_raw: "{request -> '{}'}",
       inputs: null,
+      outputs_raw: "{}",
+      outputs: {},
     },
     {
       id: "e12",
@@ -41,6 +45,8 @@ const graph: JsonGraphData = {
       color: null,
       inputs_raw: null,
       inputs: null,
+      outputs_raw: null,
+      outputs: null,
     },
     {
       id: "e21",
@@ -50,6 +56,8 @@ const graph: JsonGraphData = {
       color: null,
       inputs_raw: null,
       inputs: null,
+      outputs_raw: null,
+      outputs: null,
     },
   ],
 };
@@ -94,7 +102,61 @@ describe("graph JSON parsing", () => {
       color: null,
       inputs_raw: null,
       inputs: null,
+      outputs_raw: null,
+      outputs: null,
     });
+  });
+
+  it("preserves structured and raw transition outputs", () => {
+    const result = parseGraphJsonValue({
+      nodes: [{ id: "0" }, { id: "1" }],
+      edges: [
+        {
+          id: "e",
+          source: "0",
+          target: "1",
+          transition: "Produce",
+          outputs_raw: "{result={'value'}}",
+          outputs: {
+            result: [{ value: 1 }, { value: 1 }],
+            signal: [{ unit: 0 }],
+          },
+        },
+      ],
+    });
+
+    expect(result.graph.edges[0]).toMatchObject({
+      outputs_raw: "{result={'value'}}",
+      outputs: {
+        result: [{ value: 1 }, { value: 1 }],
+        signal: [{ unit: 0 }],
+      },
+    });
+  });
+
+  it("distinguishes missing outputs from a known empty output flow", () => {
+    const missing = parseGraphJsonValue({
+      nodes: [{ id: "0" }, { id: "1" }],
+      edges: [{ id: "e", source: "0", target: "1", transition: "Old" }],
+    });
+    const empty = parseGraphJsonValue({
+      nodes: [{ id: "0" }, { id: "1" }],
+      edges: [
+        {
+          id: "e",
+          source: "0",
+          target: "1",
+          transition: "KnownEmpty",
+          outputs_raw: "{}",
+          outputs: {},
+        },
+      ],
+    });
+
+    expect(missing.graph.edges[0].outputs_raw).toBeNull();
+    expect(missing.graph.edges[0].outputs).toBeNull();
+    expect(empty.graph.edges[0].outputs_raw).toBe("{}");
+    expect(empty.graph.edges[0].outputs).toEqual({});
   });
 
   it("preserves unknown metadata", () => {
@@ -253,6 +315,59 @@ describe("selected-path JSON", () => {
         path: { startNodeId: "0", edgeIds: ["e12"] },
       })
     ).toThrow(/current endpoint is state 0/);
+  });
+});
+
+describe("transition output validation", () => {
+  it("rejects a non-object outputs value", () => {
+    expect(() =>
+      parseGraphJsonValue({
+        nodes: [{ id: "0" }, { id: "1" }],
+        edges: [
+          {
+            id: "e",
+            source: "0",
+            target: "1",
+            transition: "Bad",
+            outputs: [],
+          },
+        ],
+      })
+    ).toThrow(/edges\[0\]\.outputs must be an object or null/);
+  });
+
+  it("rejects an output place whose tokens are not an array", () => {
+    expect(() =>
+      parseGraphJsonValue({
+        nodes: [{ id: "0" }, { id: "1" }],
+        edges: [
+          {
+            id: "e",
+            source: "0",
+            target: "1",
+            transition: "Bad",
+            outputs: { result: { id: 1 } },
+          },
+        ],
+      })
+    ).toThrow(/edges\[0\]\.outputs\.result must be an array/);
+  });
+
+  it("rejects a non-string outputs_raw value", () => {
+    expect(() =>
+      parseGraphJsonValue({
+        nodes: [{ id: "0" }, { id: "1" }],
+        edges: [
+          {
+            id: "e",
+            source: "0",
+            target: "1",
+            transition: "Bad",
+            outputs_raw: {},
+          },
+        ],
+      })
+    ).toThrow(/edges\[0\]\.outputs_raw must be a string or null/);
   });
 });
 

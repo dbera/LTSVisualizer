@@ -12,13 +12,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Added graph-level JSON metadata containing the source title, state count, and transition count.
 - Added safe filenames derived from the opened source filename for complete-graph JSON downloads.
 - Added unit-test coverage for complete-graph JSON round trips, parallel transitions, state markings, transition inputs, raw semantic values, and transition colors.
-- Added documentation for complete-graph JSON export and the backend-independent PlantUML-to-JSON workflow.
+- Added `outputs` and `outputs_raw` fields to graph edges for structured and original transition-output flows.
+- Added validation requiring transition outputs to be objects whose output-place values are token arrays.
+- Added backward-compatible normalization of omitted transition-output fields to `null`.
+- Added transition Inspector support for structured and raw inputs and outputs.
+- Added selected-path PlantUML comments for available transition outputs.
+- Added tests for raw and structured output retention, duplicate tokens, known empty output flows, unavailable output data, JSON round trips, and PlantUML path export.
+- Added documentation for complete-graph JSON export, transition-output semantics, and the backend-independent PlantUML-to-JSON workflow.
 
 ### Changed
 
 - Updated complete graph JSON serialization to include `stateCount` and `transitionCount` metadata automatically.
+- Updated complete-graph and selected-path JSON serialization to retain `outputs` and `outputs_raw` on every edge.
+- Updated Cytoscape edge data so transition outputs remain available during hover and pinned inspection.
+- Renamed the transition Inspector category from **TRANSITION INPUTS** to **TRANSITION DATA**.
+- Updated selected-path PlantUML export to prefer `outputs_raw`, fall back to structured `outputs`, preserve known empty output flows as `{}`, and omit output comments when data is unavailable.
 - Updated the frontend toolbar with a graph-level JSON export action separate from selected-path export.
-- Updated the README architecture, verification checklist, limitations, and roadmap after completing full-graph JSON export.
+- Updated the README architecture, JSON schema, export behavior, verification checklist, limitations, and roadmap after completing full-graph JSON export and transition-output support.
 
 ## [0.3.0] - 2026-08-05
 

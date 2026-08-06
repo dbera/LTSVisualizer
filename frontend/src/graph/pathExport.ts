@@ -12,6 +12,8 @@ export interface ExportGraphEdge {
   color: string | null;
   inputs_raw: string | null;
   inputs: Record<string, unknown> | null;
+  outputs_raw: string | null;
+  outputs: Record<string, unknown[]> | null;
 }
 
 export interface ExportGraphData {
@@ -120,7 +122,9 @@ export function resolveSelectedPath(
 }
 
 function normalizeRawComment(raw: string): string {
-  return raw.trim().replace(/^'(?:Transition Inputs|Marking \(State\)):\s*/, "");
+  return raw
+    .trim()
+    .replace(/^'(?:Transition Inputs|Transition Outputs|Marking \(State\)):\s*/, "");
 }
 
 function quoteToken(value: unknown): string {
@@ -163,6 +167,18 @@ function inputsComment(edge: ExportGraphEdge): string | null {
 
   if (edge.inputs !== null) {
     return `'Transition Inputs: ${serializeInputs(edge.inputs)}`;
+  }
+
+  return null;
+}
+
+function outputsComment(edge: ExportGraphEdge): string | null {
+  if (edge.outputs_raw?.trim()) {
+    return `'Transition Outputs: ${normalizeRawComment(edge.outputs_raw)}`;
+  }
+
+  if (edge.outputs !== null) {
+    return `'Transition Outputs: ${serializeMarking(edge.outputs)}`;
   }
 
   return null;
@@ -216,10 +232,14 @@ export function serializePathToPlantUml(
       }
 
       const inputs = inputsComment(edge);
+      const outputs = outputsComment(edge);
       const marking = markingComment(sourceNode);
 
       if (inputs) {
         lines.push(inputs);
+      }
+      if (outputs) {
+        lines.push(outputs);
       }
       if (marking) {
         lines.push(marking);
