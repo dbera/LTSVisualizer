@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
 } from "react";
-import axios from "axios";
 import cytoscape from "cytoscape";
 import "./App.css";
 import JsonViewer, { type JsonValue } from "./components/JsonViewer";
@@ -62,8 +61,6 @@ interface InspectorInfo {
   subtitle?: string;
   data: JsonValue;
 }
-
-const API_URL = "http://127.0.0.1:8000/graph/upload";
 
 function App() {
   const graphContainer = useRef<HTMLDivElement | null>(null);
@@ -690,20 +687,9 @@ function App() {
     updatePathMode("idle");
 
     try {
-      const isJsonFile = file.name.toLowerCase().endsWith(".json");
-      let graph: GraphData;
-      let importedPath: SelectedPath | null = null;
-
-      if (isJsonFile) {
-        const parsed = parseGraphJsonText(await file.text());
-        graph = parsed.graph;
-        importedPath = parsed.selectedPath;
-      } else {
-        const formData = new FormData();
-        formData.append("file", file);
-        const response = await axios.post<GraphData>(API_URL, formData);
-        graph = response.data;
-      }
+      const parsed = parseGraphJsonText(await file.text());
+      const graph: GraphData = parsed.graph;
+      const importedPath = parsed.selectedPath;
 
       graphRef.current = graph;
       setGraphLoaded(true);
@@ -746,18 +732,9 @@ function App() {
       );
     } catch (error) {
       console.error(error);
+      setGraphLoaded(false);
 
-      if (axios.isAxiosError(error)) {
-        const detail = error.response?.data?.detail;
-
-        if (typeof detail === "string") {
-          setStatus(detail);
-        } else if (!error.response) {
-          setStatus("Could not contact FastAPI. Start the backend and try again.");
-        } else {
-          setStatus(`Could not load ${file.name}`);
-        }
-      } else if (error instanceof Error) {
+      if (error instanceof Error) {
         setStatus(error.message);
       } else {
         setStatus(`Could not load ${file.name}`);
@@ -1075,7 +1052,7 @@ function App() {
           <input
             ref={fileInput}
             type="file"
-            accept=".puml,.plantuml,.txt,.json"
+            accept=".json,application/json"
             className="file-input"
             onChange={handleFileSelected}
           />
@@ -1187,7 +1164,7 @@ function App() {
           {!graphLoaded && (
             <div className="empty-overlay">
               <h2>No graph loaded</h2>
-              <p>Open a .puml, .plantuml, or .txt PlantUML file to begin.</p>
+              <p>Open an LTSVisualizer JSON graph file to begin.</p>
             </div>
           )}
           <div ref={graphContainer} className="graph-container" />
