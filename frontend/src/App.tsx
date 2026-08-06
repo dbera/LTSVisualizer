@@ -64,6 +64,8 @@ interface InspectorInfo {
   data: JsonValue;
 }
 
+const TERMINAL_PAGE_SIZE = 100;
+
 function App() {
   const graphContainer = useRef<HTMLDivElement | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
@@ -92,6 +94,10 @@ function App() {
   const [sidePanelMode, setSidePanelMode] =
     useState<SidePanelMode>("inspector");
   const graphAnalysis = useGraphAnalysis();
+  const [terminalStatesExpanded, setTerminalStatesExpanded] =
+    useState(false);
+  const [terminalStateFilter, setTerminalStateFilter] = useState("");
+  const [terminalStatePage, setTerminalStatePage] = useState(0);
 
   function updatePathMode(mode: PathSelectionMode) {
     pathModeRef.current = mode;
@@ -702,6 +708,9 @@ function App() {
     }
 
     graphAnalysis.reset();
+    setTerminalStatesExpanded(false);
+    setTerminalStateFilter("");
+    setTerminalStatePage(0);
     setStatus(`Loading ${file.name}...`);
     setFileName(file.name);
     setInspectorInfo(null);
@@ -1063,6 +1072,43 @@ function App() {
       target: edge.target,
     }));
   })();
+
+  const filteredTerminalNodeIds = (() => {
+    const terminalNodeIds = graphAnalysis.result?.terminalNodeIds ?? [];
+    const filter = terminalStateFilter.trim().toLocaleLowerCase();
+
+    if (!filter) return terminalNodeIds;
+
+    return terminalNodeIds.filter((nodeId) =>
+      nodeId.toLocaleLowerCase().includes(filter)
+    );
+  })();
+  const terminalPageCount = Math.max(
+    1,
+    Math.ceil(filteredTerminalNodeIds.length / TERMINAL_PAGE_SIZE)
+  );
+  const safeTerminalStatePage = Math.min(
+    terminalStatePage,
+    terminalPageCount - 1
+  );
+  const visibleTerminalNodeIds = filteredTerminalNodeIds.slice(
+    safeTerminalStatePage * TERMINAL_PAGE_SIZE,
+    (safeTerminalStatePage + 1) * TERMINAL_PAGE_SIZE
+  );
+  const terminalResultStart =
+    filteredTerminalNodeIds.length === 0
+      ? 0
+      : safeTerminalStatePage * TERMINAL_PAGE_SIZE + 1;
+  const terminalResultEnd = Math.min(
+    (safeTerminalStatePage + 1) * TERMINAL_PAGE_SIZE,
+    filteredTerminalNodeIds.length
+  );
+
+  function focusTerminalState(stateId: string) {
+    showNeighborhood(stateId, hopCount);
+    setStatus(`Focused terminal state ${stateId}`);
+  }
+
   return (
     <main className="app">
       <header className="header">
@@ -1335,9 +1381,90 @@ function App() {
                       <dd>{graphAnalysis.result.largestCyclicComponentSize}</dd>
                     </div>
                   </dl>
+                  <details
+                    className="analysis-result-group"
+                    open={terminalStatesExpanded}
+                    onToggle={(event) =>
+                      setTerminalStatesExpanded(event.currentTarget.open)
+                    }
+                  >
+                    <summary>
+                      Terminal states ({graphAnalysis.result.terminalNodeIds.length})
+                    </summary>
+                    <div className="analysis-result-content">
+                      <label
+                        className="analysis-filter-label"
+                        htmlFor="terminal-state-filter"
+                      >
+                        Filter by state ID
+                      </label>
+                      <input
+                        id="terminal-state-filter"
+                        className="analysis-filter-input"
+                        value={terminalStateFilter}
+                        onChange={(event) => {
+                          setTerminalStateFilter(event.target.value);
+                          setTerminalStatePage(0);
+                        }}
+                        placeholder="Enter all or part of an ID"
+                      />
+                      {filteredTerminalNodeIds.length === 0 ? (
+                        <p className="analysis-note">
+                          No terminal states match this filter.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="analysis-result-range">
+                            Showing {terminalResultStart}-{terminalResultEnd} of{" "}
+                            {filteredTerminalNodeIds.length}
+                          </p>
+                          <div className="terminal-state-list">
+                            {visibleTerminalNodeIds.map((nodeId) => (
+                              <button
+                                key={nodeId}
+                                type="button"
+                                onClick={() => focusTerminalState(nodeId)}
+                              >
+                                {nodeId}
+                              </button>
+                            ))}
+                          </div>
+                          {terminalPageCount > 1 && (
+                            <div className="analysis-pagination">
+                              <button
+                                type="button"
+                                disabled={safeTerminalStatePage === 0}
+                                onClick={() =>
+                                  setTerminalStatePage((page) =>
+                                    Math.max(0, page - 1)
+                                  )
+                                }
+                              >
+                                Previous
+                              </button>
+                              <span>
+                                Page {safeTerminalStatePage + 1} of {terminalPageCount}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={safeTerminalStatePage >= terminalPageCount - 1}
+                                onClick={() =>
+                                  setTerminalStatePage((page) =>
+                                    Math.min(terminalPageCount - 1, page + 1)
+                                  )
+                                }
+                              >
+                                Next
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </details>
                   <p className="analysis-note">
-                    Result navigation and component highlighting will be added in the
-                    next iteration.
+                    Terminal-state navigation uses the current neighborhood depth.
+                    Cyclic-component navigation will be added next.
                   </p>
                   <button
                     type="button"
