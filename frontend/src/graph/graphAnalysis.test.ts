@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  findStronglyConnectedComponents,
   findTerminalNodeIds,
   type GraphAnalysisInput,
 } from "./graphAnalysis";
@@ -206,5 +207,462 @@ describe("findTerminalNodeIds", () => {
         ),
       ),
     ).toEqual(["known"]);
+  });
+});
+
+describe("findStronglyConnectedComponents", () => {
+  it("returns no components for an empty graph", () => {
+    expect(
+      findStronglyConnectedComponents(graph([], [])),
+    ).toEqual([]);
+  });
+
+  it("returns an isolated state as a non-cyclic component", () => {
+    expect(
+      findStronglyConnectedComponents(
+        graph(["0"], []),
+      ),
+    ).toEqual([
+      {
+        id: 0,
+        nodeIds: ["0"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+    ]);
+  });
+
+  it("classifies a self-loop component as cyclic", () => {
+    expect(
+      findStronglyConnectedComponents(
+        graph(
+          ["0"],
+          [
+            {
+              id: "self-loop",
+              source: "0",
+              target: "0",
+            },
+          ],
+        ),
+      ),
+    ).toEqual([
+      {
+        id: 0,
+        nodeIds: ["0"],
+        internalEdgeIds: ["self-loop"],
+        isCyclic: true,
+      },
+    ]);
+  });
+
+  it("returns one component per state in a linear graph", () => {
+    expect(
+      findStronglyConnectedComponents(
+        graph(
+          ["0", "1", "2"],
+          [
+            {
+              id: "edge-0",
+              source: "0",
+              target: "1",
+            },
+            {
+              id: "edge-1",
+              source: "1",
+              target: "2",
+            },
+          ],
+        ),
+      ),
+    ).toEqual([
+      {
+        id: 0,
+        nodeIds: ["0"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+      {
+        id: 1,
+        nodeIds: ["1"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+      {
+        id: 2,
+        nodeIds: ["2"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+    ]);
+  });
+
+  it("finds a simple directed cycle", () => {
+    expect(
+      findStronglyConnectedComponents(
+        graph(
+          ["0", "1", "2"],
+          [
+            {
+              id: "edge-01",
+              source: "0",
+              target: "1",
+            },
+            {
+              id: "edge-12",
+              source: "1",
+              target: "2",
+            },
+            {
+              id: "edge-20",
+              source: "2",
+              target: "0",
+            },
+          ],
+        ),
+      ),
+    ).toEqual([
+      {
+        id: 0,
+        nodeIds: ["0", "1", "2"],
+        internalEdgeIds: [
+          "edge-01",
+          "edge-12",
+          "edge-20",
+        ],
+        isCyclic: true,
+      },
+    ]);
+  });
+
+  it("finds two disconnected cycles", () => {
+    expect(
+      findStronglyConnectedComponents(
+        graph(
+          ["a", "b", "c", "d"],
+          [
+            {
+              id: "edge-ab",
+              source: "a",
+              target: "b",
+            },
+            {
+              id: "edge-ba",
+              source: "b",
+              target: "a",
+            },
+            {
+              id: "edge-cd",
+              source: "c",
+              target: "d",
+            },
+            {
+              id: "edge-dc",
+              source: "d",
+              target: "c",
+            },
+          ],
+        ),
+      ),
+    ).toEqual([
+      {
+        id: 0,
+        nodeIds: ["a", "b"],
+        internalEdgeIds: ["edge-ab", "edge-ba"],
+        isCyclic: true,
+      },
+      {
+        id: 1,
+        nodeIds: ["c", "d"],
+        internalEdgeIds: ["edge-cd", "edge-dc"],
+        isCyclic: true,
+      },
+    ]);
+  });
+
+  it("separates a cycle from its outgoing tail", () => {
+    expect(
+      findStronglyConnectedComponents(
+        graph(
+          ["0", "1", "2"],
+          [
+            {
+              id: "edge-01",
+              source: "0",
+              target: "1",
+            },
+            {
+              id: "edge-10",
+              source: "1",
+              target: "0",
+            },
+            {
+              id: "edge-12",
+              source: "1",
+              target: "2",
+            },
+          ],
+        ),
+      ),
+    ).toEqual([
+      {
+        id: 0,
+        nodeIds: ["0", "1"],
+        internalEdgeIds: ["edge-01", "edge-10"],
+        isCyclic: true,
+      },
+      {
+        id: 1,
+        nodeIds: ["2"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+    ]);
+  });
+
+  it("separates an incoming state from a cycle", () => {
+    expect(
+      findStronglyConnectedComponents(
+        graph(
+          ["entry", "a", "b"],
+          [
+            {
+              id: "edge-entry-a",
+              source: "entry",
+              target: "a",
+            },
+            {
+              id: "edge-ab",
+              source: "a",
+              target: "b",
+            },
+            {
+              id: "edge-ba",
+              source: "b",
+              target: "a",
+            },
+          ],
+        ),
+      ),
+    ).toEqual([
+      {
+        id: 0,
+        nodeIds: ["entry"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+      {
+        id: 1,
+        nodeIds: ["a", "b"],
+        internalEdgeIds: ["edge-ab", "edge-ba"],
+        isCyclic: true,
+      },
+    ]);
+  });
+
+  it("preserves parallel internal edge IDs", () => {
+    expect(
+      findStronglyConnectedComponents(
+        graph(
+          ["0", "1"],
+          [
+            {
+              id: "edge-forward-a",
+              source: "0",
+              target: "1",
+            },
+            {
+              id: "edge-forward-b",
+              source: "0",
+              target: "1",
+            },
+            {
+              id: "edge-back",
+              source: "1",
+              target: "0",
+            },
+          ],
+        ),
+      ),
+    ).toEqual([
+      {
+        id: 0,
+        nodeIds: ["0", "1"],
+        internalEdgeIds: [
+          "edge-forward-a",
+          "edge-forward-b",
+          "edge-back",
+        ],
+        isCyclic: true,
+      },
+    ]);
+  });
+
+  it("handles mixed cyclic and acyclic regions", () => {
+    const components = findStronglyConnectedComponents(
+      graph(
+        ["start", "a", "b", "end", "isolated"],
+        [
+          {
+            id: "edge-start-a",
+            source: "start",
+            target: "a",
+          },
+          {
+            id: "edge-ab",
+            source: "a",
+            target: "b",
+          },
+          {
+            id: "edge-ba",
+            source: "b",
+            target: "a",
+          },
+          {
+            id: "edge-b-end",
+            source: "b",
+            target: "end",
+          },
+        ],
+      ),
+    );
+
+    expect(components).toEqual([
+      {
+        id: 0,
+        nodeIds: ["start"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+      {
+        id: 1,
+        nodeIds: ["a", "b"],
+        internalEdgeIds: ["edge-ab", "edge-ba"],
+        isCyclic: true,
+      },
+      {
+        id: 2,
+        nodeIds: ["end"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+      {
+        id: 3,
+        nodeIds: ["isolated"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+    ]);
+  });
+
+  it("ignores edges that reference unknown nodes", () => {
+    expect(
+      findStronglyConnectedComponents(
+        graph(
+          ["known"],
+          [
+            {
+              id: "unknown-source",
+              source: "external",
+              target: "known",
+            },
+            {
+              id: "unknown-target",
+              source: "known",
+              target: "external",
+            },
+          ],
+        ),
+      ),
+    ).toEqual([
+      {
+        id: 0,
+        nodeIds: ["known"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+    ]);
+  });
+
+  it("does not modify the input", () => {
+    const input = graph(
+      ["0", "1"],
+      [
+        {
+          id: "edge-01",
+          source: "0",
+          target: "1",
+        },
+        {
+          id: "edge-10",
+          source: "1",
+          target: "0",
+        },
+      ],
+    );
+
+    const originalInput = structuredClone(input);
+
+    findStronglyConnectedComponents(input);
+
+    expect(input).toEqual(originalInput);
+  });
+
+  it("handles a long graph without recursive calls", () => {
+    const nodeCount = 20_000;
+    const nodeIds = Array.from(
+      { length: nodeCount },
+      (_, index) => String(index),
+    );
+
+    const edges = Array.from(
+      { length: nodeCount - 1 },
+      (_, index) => ({
+        id: `edge-${index}`,
+        source: String(index),
+        target: String(index + 1),
+      }),
+    );
+
+    const components = findStronglyConnectedComponents(
+      graph(nodeIds, edges),
+    );
+
+    expect(components).toHaveLength(nodeCount);
+    expect(components[0].nodeIds).toEqual(["0"]);
+    expect(components[nodeCount - 1].nodeIds).toEqual([
+      String(nodeCount - 1),
+    ]);
+    expect(
+      components.every((component) => !component.isCyclic),
+    ).toBe(true);
+  });
+
+  it("handles one large strongly connected component", () => {
+    const nodeCount = 10_000;
+    const nodeIds = Array.from(
+      { length: nodeCount },
+      (_, index) => String(index),
+    );
+
+    const edges = Array.from(
+      { length: nodeCount },
+      (_, index) => ({
+        id: `edge-${index}`,
+        source: String(index),
+        target: String((index + 1) % nodeCount),
+      }),
+    );
+
+    const components = findStronglyConnectedComponents(
+      graph(nodeIds, edges),
+    );
+
+    expect(components).toHaveLength(1);
+    expect(components[0].nodeIds).toHaveLength(nodeCount);
+    expect(components[0].internalEdgeIds).toHaveLength(
+      nodeCount,
+    );
+    expect(components[0].isCyclic).toBe(true);
   });
 });
