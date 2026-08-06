@@ -1,4 +1,4 @@
-name: Build Windows release
+name: Build offline HTML release
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version label for a manual test build"
+        description: "Version label for the manual test build"
         required: false
         default: "manual"
 
@@ -15,145 +15,73 @@ permissions:
   contents: write
 
 concurrency:
-  group: windows-release-${{ github.ref }}
+  group: offline-html-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  build-windows:
-    name: Build Windows x64 package
-    runs-on: windows-latest
-    timeout-minutes: 30
+  build-offline:
+    name: Build offline HTML
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: frontend
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            backend/requirements.txt
-            backend/requirements-dev.txt
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install Python dependencies
-        shell: pwsh
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r backend/requirements-dev.txt
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        shell: pwsh
+      - name: Install dependencies
         run: npm ci
 
-      - name: Lint frontend
-        working-directory: frontend
-        shell: pwsh
+      - name: Run tests
+        run: npm test
+
+      - name: Run lint
         run: npm run lint
 
-      - name: Build frontend
-        working-directory: frontend
-        shell: pwsh
-        run: npm run build
+      - name: Build offline HTML
+        run: npm run build:offline
 
-      - name: Verify frontend build
-        shell: pwsh
+      - name: Prepare release file
+        run: mv dist-offline/index.html dist-offline/LTSVisualizer.html
+
+      - name: Generate SHA-256 checksum
         run: |
-          if (-not (Test-Path "frontend/dist/index.html")) {
-            throw "frontend/dist/index.html was not created"
-          }
+          cd dist-offline
+          sha256sum LTSVisualizer.html > SHA256SUMS.txt
 
-          $javascript = @(Get-ChildItem "frontend/dist/assets" -Filter "*.js")
-          $stylesheets = @(Get-ChildItem "frontend/dist/assets" -Filter "*.css")
-
-          if ($javascript.Count -eq 0) {
-            throw "No JavaScript bundle was created"
-          }
-
-          if ($stylesheets.Count -eq 0) {
-            throw "No CSS bundle was created"
-          }
-
-      - name: Run backend tests
-        shell: pwsh
-        env:
-          PYTHONPATH: backend
-        run: python -m pytest backend/tests -v
-
-      - name: Build Windows application
-        shell: pwsh
-        run: python -m PyInstaller --clean --noconfirm LTSVisualizer.spec
-
-      - name: Verify packaged application
-        shell: pwsh
+      - name: Verify release contents
         run: |
-          $exe = "dist/LTSVisualizer/LTSVisualizer.exe"
-          $index = "dist/LTSVisualizer/_internal/frontend/dist/index.html"
+          find dist-offline -maxdepth 1 -type f -printf "%f\n"
+          test -f dist-offline/LTSVisualizer.html
+          test -f dist-offline/SHA256SUMS.txt
+          test "$(find dist-offline -maxdepth 1 -type f | wc -l)" -eq 2
 
-          if (-not (Test-Path $exe)) {
-            throw "Packaged executable was not created: $exe"
-          }
-
-          if (-not (Test-Path $index)) {
-            throw "Bundled frontend was not created: $index"
-          }
-
-      - name: Create release ZIP and checksum
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force release | Out-Null
-
-          $zipPath = "release/LTSVisualizer-Windows-x64.zip"
-
-          Compress-Archive `
-            -Path "dist/LTSVisualizer/*" `
-            -DestinationPath $zipPath `
-            -Force
-
-          if (-not (Test-Path $zipPath)) {
-            throw "Windows release ZIP was not created"
-          }
-
-          $hash = Get-FileHash $zipPath -Algorithm SHA256
-          "$($hash.Hash)  LTSVisualizer-Windows-x64.zip" |
-            Set-Content "release/SHA256SUMS.txt"
-
-      - name: Upload directly testable Windows application
+      - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LTSVisualizer-Windows-x64
-          path: dist/LTSVisualizer/**
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload release files for inspection
-        uses: actions/upload-artifact@v4
-        with:
-          name: LTSVisualizer-release-files
+          name: LTSVisualizer-offline-${{ github.event.inputs.version || github.ref_name }}
           path: |
-            release/LTSVisualizer-Windows-x64.zip
-            release/SHA256SUMS.txt
+            frontend/dist-offline/LTSVisualizer.html
+            frontend/dist-offline/SHA256SUMS.txt
           if-no-files-found: error
-          retention-days: 14
 
-      - name: Publish GitHub Release
+      - name: Publish tagged GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" `
-            "release/LTSVisualizer-Windows-x64.zip#Windows x64 portable application" `
-            "release/SHA256SUMS.txt#SHA-256 checksums" `
-            --verify-tag `
-            --generate-notes `
-            --title "LTSVisualizer ${{ github.ref_name }}"
+          gh release create "${{ github.ref_name }}" \
+            dist-offline/LTSVisualizer.html \
+            dist-offline/SHA256SUMS.txt \
+            --title "LTSVisualizer ${{ github.ref_name }}" \
+            --generate-notes
