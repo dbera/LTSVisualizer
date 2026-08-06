@@ -347,3 +347,135 @@ button.active {
     flex-wrap: wrap;
   }
 }
+
+.side-panel-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: -4px 0 18px;
+  padding: 4px;
+  border-radius: 9px;
+  background: #e2e8f0;
+}
+
+.side-panel-tabs button {
+  border-color: transparent;
+  background: transparent;
+  font-size: 13px;
+}
+
+.side-panel-tabs button.active {
+  border-color: #bfdbfe;
+  background: #ffffff;
+  color: #1d4ed8;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.analysis-heading {
+  margin-bottom: 16px;
+}
+
+.analysis-heading h2 {
+  margin: 4px 0 0;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.analysis-message,
+.analysis-results {
+  color: #475569;
+}
+
+.analysis-message > p:first-child,
+.analysis-results > p:first-child {
+  margin-top: 0;
+}
+
+.analysis-input-summary,
+.analysis-summary {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.analysis-input-summary > div,
+.analysis-summary > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 11px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.analysis-input-summary dt,
+.analysis-summary dt {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.analysis-input-summary dd,
+.analysis-summary dd {
+  margin: 0;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.analysis-note {
+  margin: 14px 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.analysis-action {
+  margin-top: 4px;
+}
+
+.analysis-error {
+  padding: 10px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+  overflow-wrap: anywhere;
+}
+
+.analysis-progress {
+  position: relative;
+  height: 5px;
+  margin: 16px 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dbeafe;
+}
+
+.analysis-progress::after {
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: #2563eb;
+  content: "";
+  animation: analysis-progress 1.2s ease-in-out infinite;
+}
+
+@keyframes analysis-progress {
+  from {
+    transform: translateX(-110%);
+  }
+
+  to {
+    transform: translateX(360%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analysis-progress::after {
+    animation: none;
+    width: 100%;
+  }
+}

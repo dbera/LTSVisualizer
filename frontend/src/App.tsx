@@ -29,6 +29,7 @@ import {
   parseGraphJsonText,
   serializeGraphJson,
 } from "./graph/graphJson";
+import { useGraphAnalysis } from "./graph/useGraphAnalysis";
 
 interface GraphNode {
   id: string;
@@ -54,6 +55,7 @@ interface GraphData {
 }
 
 type OverviewLayout = "hierarchical" | "grid";
+type SidePanelMode = "inspector" | "analysis";
 
 interface InspectorInfo {
   type: "node" | "edge";
@@ -87,6 +89,9 @@ function App() {
   const [pinnedInspector, setPinnedInspector] = useState<InspectorInfo | null>(null);
   const [pathMode, setPathMode] = useState<PathSelectionMode>("idle");
   const [selectedPath, setSelectedPath] = useState<SelectedPath | null>(null);
+  const [sidePanelMode, setSidePanelMode] =
+    useState<SidePanelMode>("inspector");
+  const graphAnalysis = useGraphAnalysis();
 
   function updatePathMode(mode: PathSelectionMode) {
     pathModeRef.current = mode;
@@ -671,6 +676,24 @@ function App() {
     }
   }
 
+  function runGraphAnalysis() {
+    const graph = graphRef.current;
+
+    if (!graph) {
+      setStatus("Open a graph before running analysis");
+      return;
+    }
+
+    graphAnalysis.run({
+      nodeIds: graph.nodes.map((node) => node.id),
+      edges: graph.edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+      })),
+    });
+  }
+
   async function handleFileSelected(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
@@ -678,6 +701,7 @@ function App() {
       return;
     }
 
+    graphAnalysis.reset();
     setStatus(`Loading ${file.name}...`);
     setFileName(file.name);
     setInspectorInfo(null);
@@ -1171,54 +1195,185 @@ function App() {
         </div>
 
         <aside className="inspector">
-          <div className="inspector-heading">
-            <div>
-              <span className="eyebrow">Inspector</span>
-              <h2>{visibleInspector?.title ?? "Nothing selected"}</h2>
-            </div>
-
-            {pinnedInspector && (
-              <button
-                type="button"
-                className="clear-button"
-                onClick={() => {
-                  pinnedInspectorRef.current = null;
-                  setPinnedInspector(null);
-                  setInspectorInfo(null);
-                  cyRef.current?.elements().unselect();
-                }}
-              >
-                Clear
-              </button>
-            )}
+          <div className="side-panel-tabs" role="tablist" aria-label="Side panel">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sidePanelMode === "inspector"}
+              className={sidePanelMode === "inspector" ? "active" : ""}
+              onClick={() => setSidePanelMode("inspector")}
+            >
+              Inspector
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sidePanelMode === "analysis"}
+              className={sidePanelMode === "analysis" ? "active" : ""}
+              onClick={() => setSidePanelMode("analysis")}
+            >
+              Analysis
+            </button>
           </div>
 
-          {visibleInspector ? (
+          {sidePanelMode === "inspector" ? (
             <>
-              <div className={`inspector-type ${visibleInspector.type}`}>
-                {visibleInspector.type === "node"
-                  ? "STATE MARKING"
-                  : "TRANSITION DATA"}
+              <div className="inspector-heading">
+                <div>
+                  <span className="eyebrow">Inspector</span>
+                  <h2>{visibleInspector?.title ?? "Nothing selected"}</h2>
+                </div>
+                {pinnedInspector && (
+                  <button
+                    type="button"
+                    className="clear-button"
+                    onClick={() => {
+                      pinnedInspectorRef.current = null;
+                      setPinnedInspector(null);
+                      setInspectorInfo(null);
+                      cyRef.current?.elements().unselect();
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
-              {visibleInspector.subtitle && (
-                <p className="inspector-subtitle">{visibleInspector.subtitle}</p>
+              {visibleInspector ? (
+                <>
+                  <div className={`inspector-type ${visibleInspector.type}`}>
+                    {visibleInspector.type === "node"
+                      ? "STATE MARKING"
+                      : "TRANSITION DATA"}
+                  </div>
+                  {visibleInspector.subtitle && (
+                    <p className="inspector-subtitle">{visibleInspector.subtitle}</p>
+                  )}
+                  <JsonViewer
+                    key={`${visibleInspector.type}-${visibleInspector.title}`}
+                    value={visibleInspector.data}
+                    label={`${visibleInspector.title} ${visibleInspector.subtitle ?? "data"}`}
+                  />
+                  <p className="inspector-tip">
+                    {pinnedInspector
+                      ? "This item is pinned. Select Clear to resume hover inspection."
+                      : "Click a state or transition to pin this information."}
+                  </p>
+                </>
+              ) : (
+                <div className="inspector-empty">
+                  <p>Hover over a state or transition to inspect its data.</p>
+                  <p>Click an item to keep its data visible.</p>
+                </div>
               )}
-              <JsonViewer
-                key={`${visibleInspector.type}-${visibleInspector.title}`}
-                value={visibleInspector.data}
-                label={`${visibleInspector.title} ${visibleInspector.subtitle ?? "data"}`}
-              />
-              <p className="inspector-tip">
-                {pinnedInspector
-                  ? "This item is pinned. Select Clear to resume hover inspection."
-                  : "Click a state or transition to pin this information."}
-              </p>
             </>
           ) : (
-            <div className="inspector-empty">
-              <p>Hover over a state or transition to inspect its data.</p>
-              <p>Click an item to keep its data visible.</p>
-            </div>
+            <section className="analysis-panel" role="tabpanel">
+              <div className="analysis-heading">
+                <span className="eyebrow">Graph analysis</span>
+                <h2>Terminal states and cycles</h2>
+              </div>
+
+              {!graphLoaded ? (
+                <div className="analysis-message">
+                  <p>Open a graph before running analysis.</p>
+                </div>
+              ) : graphAnalysis.status === "not-run" ? (
+                <div className="analysis-message">
+                  <p>Analysis has not been run for this graph.</p>
+                  <dl className="analysis-input-summary">
+                    <div>
+                      <dt>States</dt>
+                      <dd>{graphRef.current?.nodes.length ?? 0}</dd>
+                    </div>
+                    <div>
+                      <dt>Transitions</dt>
+                      <dd>{graphRef.current?.edges.length ?? 0}</dd>
+                    </div>
+                  </dl>
+                  <p className="analysis-note">
+                    Terminal states have no outgoing transitions. Whether a terminal
+                    state represents a deadlock or successful completion depends on
+                    the model.
+                  </p>
+                  <button
+                    type="button"
+                    className="primary-button analysis-action"
+                    onClick={runGraphAnalysis}
+                  >
+                    Run analysis
+                  </button>
+                </div>
+              ) : graphAnalysis.status === "running" ? (
+                <div className="analysis-message" aria-live="polite">
+                  <p>Analyzing graph...</p>
+                  <div className="analysis-progress" aria-hidden="true" />
+                  <button
+                    type="button"
+                    className="analysis-action"
+                    onClick={graphAnalysis.cancel}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : graphAnalysis.status === "completed" && graphAnalysis.result ? (
+                <div className="analysis-results" aria-live="polite">
+                  <dl className="analysis-summary">
+                    <div>
+                      <dt>Terminal states</dt>
+                      <dd>{graphAnalysis.result.terminalNodeIds.length}</dd>
+                    </div>
+                    <div>
+                      <dt>Cyclic components</dt>
+                      <dd>{graphAnalysis.result.cyclicComponents.length}</dd>
+                    </div>
+                    <div>
+                      <dt>States in cyclic components</dt>
+                      <dd>{graphAnalysis.result.statesInCyclicComponents}</dd>
+                    </div>
+                    <div>
+                      <dt>Largest cyclic component</dt>
+                      <dd>{graphAnalysis.result.largestCyclicComponentSize}</dd>
+                    </div>
+                  </dl>
+                  <p className="analysis-note">
+                    Result navigation and component highlighting will be added in the
+                    next iteration.
+                  </p>
+                  <button
+                    type="button"
+                    className="analysis-action"
+                    onClick={runGraphAnalysis}
+                  >
+                    Run again
+                  </button>
+                </div>
+              ) : graphAnalysis.status === "failed" ? (
+                <div className="analysis-message" role="alert">
+                  <p>Analysis could not be completed.</p>
+                  <p className="analysis-error">
+                    {graphAnalysis.error ?? "An unknown error occurred."}
+                  </p>
+                  <button
+                    type="button"
+                    className="analysis-action"
+                    onClick={runGraphAnalysis}
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : (
+                <div className="analysis-message">
+                  <p>Analysis was cancelled.</p>
+                  <button
+                    type="button"
+                    className="analysis-action"
+                    onClick={runGraphAnalysis}
+                  >
+                    Run analysis
+                  </button>
+                </div>
+              )}
+            </section>
           )}
         </aside>
       </section>
