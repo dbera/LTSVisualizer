@@ -1,0 +1,154 @@
+{
+  "nodes": [
+    {
+      "id": "0",
+      "marking_raw": "{p0={'{\"unit\": 0}'}}"
+    },
+    {
+      "id": "1",
+      "marking_raw": "{PrintFactoryA3DPrinterInput={'{\"Flow_1u2qmtt\": {\"unit\": 0}, \"request\": {\"id\": 1, \"resolution\": \"PrintResolution::LOW\", \"scale\": 50.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PRINT\"}, \"variants\": {\"version\": \"\", \"release\": \"\"}, \"Event_0jcg6zx\": {\"unit\": 0}, \"printResult\": {\"verdict\": \"Outcome::OK\"}, \"printReport\": {\"id\": 0}, \"printJob\": {\"id\": 0, \"resolution\": \"PrintResolution::LOW\", \"scale\": 0.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"corrections\": {\"correctionsMap\": {}, \"id\": 0}, \"Flow_0iaelzn\": {\"unit\": 0}, \"Event_0mxx05p\": {\"unit\": 0}}'}, p1={'{\"unit\": 0}'}}"
+    },
+    {
+      "id": "2",
+      "marking_raw": "{ctx={'{\"id\": 1}'}, p1={'{\"unit\": 0}'}, split={'{\"unit\": 0}'}}"
+    },
+    {
+      "id": "3",
+      "marking_raw": "{PrintFactoryA3DPrinterInput={'{\"Flow_1u2qmtt\": {\"unit\": 0}, \"request\": {\"id\": 1, \"resolution\": \"PrintResolution::LOW\", \"scale\": null, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"variants\": {\"version\": \"\", \"release\": \"\"}, \"Event_0jcg6zx\": {\"unit\": 0}, \"printResult\": {\"verdict\": \"Outcome::OK\"}, \"printReport\": {\"id\": 0}, \"printJob\": {\"id\": 0, \"resolution\": \"PrintResolution::LOW\", \"scale\": 0.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"corrections\": {\"correctionsMap\": {}, \"id\": 0}, \"Flow_0iaelzn\": {\"unit\": 0}, \"Event_0mxx05p\": {\"unit\": 0}}'}, ctx={'{\"id\": 1}'}, p2={'{\"unit\": 0}'}, split={'{\"unit\": 0}'}}"
+    },
+    {
+      "id": "4",
+      "marking_raw": "{p2={'{\"unit\": 0}'}}"
+    },
+    {
+      "id": "5",
+      "marking_raw": "{PrintFactoryA3DPrinterInput={'{\"Flow_1u2qmtt\": {\"unit\": 0}, \"request\": {\"id\": 2, \"resolution\": \"PrintResolution::MED\", \"scale\": 75.0, \"color\": \"ColorType::COLOR\", \"opType\": \"OperationType::PRINT\"}, \"variants\": {\"version\": \"\", \"release\": \"\"}, \"Event_0jcg6zx\": {\"unit\": 0}, \"printResult\": {\"verdict\": \"Outcome::OK\"}, \"printReport\": {\"id\": 0}, \"printJob\": {\"id\": 0, \"resolution\": \"PrintResolution::LOW\", \"scale\": 0.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"corrections\": {\"correctionsMap\": {}, \"id\": 0}, \"Flow_0iaelzn\": {\"unit\": 0}, \"Event_0mxx05p\": {\"unit\": 0}}'}, p3={'{\"unit\": 0}'}}"
+    },
+    {
+      "id": "6",
+      "marking_raw": "{ctx={'{\"id\": 2}'}, p3={'{\"unit\": 0}'}, split={'{\"unit\": 0}'}}"
+    },
+    {
+      "id": "7",
+      "marking_raw": "{PrintFactoryA3DPrinterInput={'{\"Flow_1u2qmtt\": {\"unit\": 0}, \"request\": {\"id\": 2, \"resolution\": \"PrintResolution::MED\", \"scale\": null, \"color\": \"ColorType::COLOR\", \"opType\": \"OperationType::PREP\"}, \"variants\": {\"version\": \"\", \"release\": \"\"}, \"Event_0jcg6zx\": {\"unit\": 0}, \"printResult\": {\"verdict\": \"Outcome::OK\"}, \"printReport\": {\"id\": 0}, \"printJob\": {\"id\": 0, \"resolution\": \"PrintResolution::LOW\", \"scale\": 0.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"corrections\": {\"correctionsMap\": {}, \"id\": 0}, \"Flow_0iaelzn\": {\"unit\": 0}, \"Event_0mxx05p\": {\"unit\": 0}}'}, ctx={'{\"id\": 2}'}, p4={'{\"unit\": 0}'}, split={'{\"unit\": 0}'}}"
+    },
+    {
+      "id": "8",
+      "marking_raw": "{p4={'{\"unit\": 0}'}}"
+    },
+    {
+      "id": "9",
+      "marking_raw": "{PrintFactoryA3DPrinterInput={'{\"Flow_1u2qmtt\": {\"unit\": 0}, \"request\": {\"id\": 3, \"resolution\": \"PrintResolution::HIGH\", \"scale\": 75.0, \"color\": \"ColorType::COLOR\", \"opType\": \"OperationType::PRINT\"}, \"variants\": {\"version\": \"\", \"release\": \"\"}, \"Event_0jcg6zx\": {\"unit\": 0}, \"printResult\": {\"verdict\": \"Outcome::OK\"}, \"printReport\": {\"id\": 0}, \"printJob\": {\"id\": 0, \"resolution\": \"PrintResolution::LOW\", \"scale\": 0.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"corrections\": {\"correctionsMap\": {}, \"id\": 0}, \"Flow_0iaelzn\": {\"unit\": 0}, \"Event_0mxx05p\": {\"unit\": 0}}'}, p5={'{\"unit\": 0}'}}"
+    },
+    {
+      "id": "10",
+      "marking_raw": "{ctx={'{\"id\": 3}'}, p5={'{\"unit\": 0}'}, split={'{\"unit\": 0}'}}"
+    },
+    {
+      "id": "11",
+      "marking_raw": "{PrintFactoryA3DPrinterInput={'{\"Flow_1u2qmtt\": {\"unit\": 0}, \"request\": {\"id\": 3, \"resolution\": \"PrintResolution::HIGH\", \"scale\": null, \"color\": \"ColorType::COLOR\", \"opType\": \"OperationType::PREP\"}, \"variants\": {\"version\": \"\", \"release\": \"\"}, \"Event_0jcg6zx\": {\"unit\": 0}, \"printResult\": {\"verdict\": \"Outcome::OK\"}, \"printReport\": {\"id\": 0}, \"printJob\": {\"id\": 0, \"resolution\": \"PrintResolution::LOW\", \"scale\": 0.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"corrections\": {\"correctionsMap\": {}, \"id\": 0}, \"Flow_0iaelzn\": {\"unit\": 0}, \"Event_0mxx05p\": {\"unit\": 0}}'}, ctx={'{\"id\": 3}'}, p6={'{\"unit\": 0}'}, split={'{\"unit\": 0}'}}"
+    },
+    {
+      "id": "12",
+      "marking_raw": "{finalPlace={'{\"unit\": 0}'}}"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-0",
+      "source": "0",
+      "target": "1",
+      "transition": "RootConcreteTSpec_ExecutePrinter_0",
+      "color": null,
+      "inputs_raw": "{v_p0 -> '{\"unit\": 0}'}"
+    },
+    {
+      "id": "edge-1",
+      "source": "1",
+      "target": "2",
+      "transition": "RootRESPONSE_Activation",
+      "color": "darkorange",
+      "inputs_raw": "{v_PrintFactoryA3DPrinterInput -> '{\"Flow_1u2qmtt\": {\"unit\": 0}, \"request\": {\"id\": 1, \"resolution\": \"PrintResolution::LOW\", \"scale\": 50.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PRINT\"}, \"variants\": {\"version\": \"\", \"release\": \"\"}, \"Event_0jcg6zx\": {\"unit\": 0}, \"printResult\": {\"verdict\": \"Outcome::OK\"}, \"printReport\": {\"id\": 0}, \"printJob\": {\"id\": 0, \"resolution\": \"PrintResolution::LOW\", \"scale\": 0.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"corrections\": {\"correctionsMap\": {}, \"id\": 0}, \"Flow_0iaelzn\": {\"unit\": 0}, \"Event_0mxx05p\": {\"unit\": 0}}'}"
+    },
+    {
+      "id": "edge-2",
+      "source": "2",
+      "target": "3",
+      "transition": "RootConcreteTSpec_ExecutePrinter_1",
+      "color": null,
+      "inputs_raw": "{v_p1 -> '{\"unit\": 0}'}"
+    },
+    {
+      "id": "edge-3",
+      "source": "3",
+      "target": "4",
+      "transition": "RootRESPONSE_Target",
+      "color": "darkorange",
+      "inputs_raw": "{v_split -> '{\"unit\": 0}', v_PrintFactoryA3DPrinterInput -> '{\"Flow_1u2qmtt\": {\"unit\": 0}, \"request\": {\"id\": 1, \"resolution\": \"PrintResolution::LOW\", \"scale\": null, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"variants\": {\"version\": \"\", \"release\": \"\"}, \"Event_0jcg6zx\": {\"unit\": 0}, \"printResult\": {\"verdict\": \"Outcome::OK\"}, \"printReport\": {\"id\": 0}, \"printJob\": {\"id\": 0, \"resolution\": \"PrintResolution::LOW\", \"scale\": 0.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"corrections\": {\"correctionsMap\": {}, \"id\": 0}, \"Flow_0iaelzn\": {\"unit\": 0}, \"Event_0mxx05p\": {\"unit\": 0}}', v_ctx -> '{\"id\": 1}'}"
+    },
+    {
+      "id": "edge-4",
+      "source": "4",
+      "target": "5",
+      "transition": "RootConcreteTSpec_ExecutePrinter_2",
+      "color": null,
+      "inputs_raw": "{v_p2 -> '{\"unit\": 0}'}"
+    },
+    {
+      "id": "edge-5",
+      "source": "5",
+      "target": "6",
+      "transition": "RootRESPONSE_Activation",
+      "color": "darkorange",
+      "inputs_raw": "{v_PrintFactoryA3DPrinterInput -> '{\"Flow_1u2qmtt\": {\"unit\": 0}, \"request\": {\"id\": 2, \"resolution\": \"PrintResolution::MED\", \"scale\": 75.0, \"color\": \"ColorType::COLOR\", \"opType\": \"OperationType::PRINT\"}, \"variants\": {\"version\": \"\", \"release\": \"\"}, \"Event_0jcg6zx\": {\"unit\": 0}, \"printResult\": {\"verdict\": \"Outcome::OK\"}, \"printReport\": {\"id\": 0}, \"printJob\": {\"id\": 0, \"resolution\": \"PrintResolution::LOW\", \"scale\": 0.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"corrections\": {\"correctionsMap\": {}, \"id\": 0}, \"Flow_0iaelzn\": {\"unit\": 0}, \"Event_0mxx05p\": {\"unit\": 0}}'}"
+    },
+    {
+      "id": "edge-6",
+      "source": "6",
+      "target": "7",
+      "transition": "RootConcreteTSpec_ExecutePrinter_3",
+      "color": null,
+      "inputs_raw": "{v_p3 -> '{\"unit\": 0}'}"
+    },
+    {
+      "id": "edge-7",
+      "source": "7",
+      "target": "8",
+      "transition": "RootRESPONSE_Target",
+      "color": "darkorange",
+      "inputs_raw": "{v_split -> '{\"unit\": 0}', v_PrintFactoryA3DPrinterInput -> '{\"Flow_1u2qmtt\": {\"unit\": 0}, \"request\": {\"id\": 2, \"resolution\": \"PrintResolution::MED\", \"scale\": null, \"color\": \"ColorType::COLOR\", \"opType\": \"OperationType::PREP\"}, \"variants\": {\"version\": \"\", \"release\": \"\"}, \"Event_0jcg6zx\": {\"unit\": 0}, \"printResult\": {\"verdict\": \"Outcome::OK\"}, \"printReport\": {\"id\": 0}, \"printJob\": {\"id\": 0, \"resolution\": \"PrintResolution::LOW\", \"scale\": 0.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"corrections\": {\"correctionsMap\": {}, \"id\": 0}, \"Flow_0iaelzn\": {\"unit\": 0}, \"Event_0mxx05p\": {\"unit\": 0}}', v_ctx -> '{\"id\": 2}'}"
+    },
+    {
+      "id": "edge-8",
+      "source": "8",
+      "target": "9",
+      "transition": "RootConcreteTSpec_ExecutePrinter_4",
+      "color": null,
+      "inputs_raw": "{v_p4 -> '{\"unit\": 0}'}"
+    },
+    {
+      "id": "edge-9",
+      "source": "9",
+      "target": "10",
+      "transition": "RootRESPONSE_Activation",
+      "color": "darkorange",
+      "inputs_raw": "{v_PrintFactoryA3DPrinterInput -> '{\"Flow_1u2qmtt\": {\"unit\": 0}, \"request\": {\"id\": 3, \"resolution\": \"PrintResolution::HIGH\", \"scale\": 75.0, \"color\": \"ColorType::COLOR\", \"opType\": \"OperationType::PRINT\"}, \"variants\": {\"version\": \"\", \"release\": \"\"}, \"Event_0jcg6zx\": {\"unit\": 0}, \"printResult\": {\"verdict\": \"Outcome::OK\"}, \"printReport\": {\"id\": 0}, \"printJob\": {\"id\": 0, \"resolution\": \"PrintResolution::LOW\", \"scale\": 0.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"corrections\": {\"correctionsMap\": {}, \"id\": 0}, \"Flow_0iaelzn\": {\"unit\": 0}, \"Event_0mxx05p\": {\"unit\": 0}}'}"
+    },
+    {
+      "id": "edge-10",
+      "source": "10",
+      "target": "11",
+      "transition": "RootConcreteTSpec_ExecutePrinter_5",
+      "color": null,
+      "inputs_raw": "{v_p5 -> '{\"unit\": 0}'}"
+    },
+    {
+      "id": "edge-11",
+      "source": "11",
+      "target": "12",
+      "transition": "RootRESPONSE_Target",
+      "color": "darkorange",
+      "inputs_raw": "{v_split -> '{\"unit\": 0}', v_PrintFactoryA3DPrinterInput -> '{\"Flow_1u2qmtt\": {\"unit\": 0}, \"request\": {\"id\": 3, \"resolution\": \"PrintResolution::HIGH\", \"scale\": null, \"color\": \"ColorType::COLOR\", \"opType\": \"OperationType::PREP\"}, \"variants\": {\"version\": \"\", \"release\": \"\"}, \"Event_0jcg6zx\": {\"unit\": 0}, \"printResult\": {\"verdict\": \"Outcome::OK\"}, \"printReport\": {\"id\": 0}, \"printJob\": {\"id\": 0, \"resolution\": \"PrintResolution::LOW\", \"scale\": 0.0, \"color\": \"ColorType::MONOCHROME\", \"opType\": \"OperationType::PREP\"}, \"corrections\": {\"correctionsMap\": {}, \"id\": 0}, \"Flow_0iaelzn\": {\"unit\": 0}, \"Event_0mxx05p\": {\"unit\": 0}}', v_ctx -> '{\"id\": 3}'}"
+    }
+  ]
+}

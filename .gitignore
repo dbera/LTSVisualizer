@@ -84,6 +84,10 @@ Desktop.ini
 
 # Uploaded or locally generated graph outputs
 sample-data/*.json
+# Keep repository sample graphs
+!sample-data/example.json
+!sample-data/rg_imaging.json
+
 
 # PyInstaller output, to be enabled later
 backend/build/

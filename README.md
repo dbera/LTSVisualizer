@@ -1,41 +1,71 @@
 # LTSVisualizer
 
-An interactive application for exploring large labelled transition systems and reachability graphs stored in PlantUML or JSON format.
+LTSVisualizer is a browser-based application for exploring large labelled transition systems and reachability graphs stored as JSON.
 
-<img width="2873" height="1743" alt="LTSVisualizer dashboard showing a reachability graph and state inspector" src="https://github.com/user-attachments/assets/43179c21-0d39-4991-bb11-10d8a188227a" />
-
-LTSVisualizer was created primarily for reachability graphs generated from Colored Petri Nets, where:
+It was created primarily for reachability graphs generated from Colored Petri Nets, where:
 
 - **Nodes** represent markings or states.
 - **Edges** represent fired transitions.
-- **Transition inputs** describe the data consumed by a transition.
-- **Transition outputs** describe the tokens produced by a transition, grouped by output place.
+- **Transition inputs** describe data consumed by a transition.
+- **Transition outputs** describe tokens produced by a transition, grouped by output place.
 - **State markings** describe the distribution of tokens across Petri-net places.
 
-The application uses a React and Cytoscape.js frontend for visualization. An optional Python and FastAPI backend parses PlantUML graph files.
-
-JSON graphs are parsed directly in the browser and do not require the backend.
+The application is implemented with React, TypeScript, Vite, and Cytoscape.js. Graph files are parsed and validated locally in the browser. LTSVisualizer has no backend, sends no graph data to a server, and requires no Python installation.
 
 LTSVisualizer supports small linear graphs and large cyclic state spaces containing thousands of states and transitions.
 
+## Ways to use LTSVisualizer
+
+### Online
+
+The repository contains a GitHub Pages deployment workflow for the static application. When the deployment is available, the application is served at:
+
+<https://dbera.github.io/LTSVisualizer/>
+
+### Offline
+
+Download `LTSVisualizer.html` from a GitHub Release or from the artifact of a manually triggered **Build offline HTML release** workflow.
+
+The file is self-contained and can be opened directly in a modern browser:
+
+1. Download `LTSVisualizer.html` and `SHA256SUMS.txt`.
+2. Optionally verify the checksum as described below.
+3. Double-click `LTSVisualizer.html`, or use **Open with** and select a modern browser.
+4. Open a local JSON graph from the application.
+
+No installation, local server, Node.js, or Python runtime is required.
+
+## Verify an offline release
+
+On Windows PowerShell:
+
+```powershell
+Get-FileHash .\LTSVisualizer.html -Algorithm SHA256
+Get-Content .\SHA256SUMS.txt
+```
+
+The calculated hash must match the hash recorded for `LTSVisualizer.html`.
+
 ## Features
 
-### Graph input
+### JSON graph input
 
 - Open `.json` LTS graph files directly in the browser.
-- Open `.puml`, `.plantuml`, and compatible PlantUML `.txt` files through the FastAPI backend.
-- Validate JSON graph structure, node IDs, edge IDs, references, and saved paths.
-- Preserve transition colors such as `#darkorange`.
-- Preserve structured transition-input and transition-output data.
-- Preserve structured state markings and token values.
-- Preserve raw transition inputs, raw transition outputs, and raw state markings when available.
-- Export the complete loaded graph as JSON for later frontend-only use.
+- Validate document structure, node IDs, edge IDs, source and target references, semantic fields, and saved paths.
+- Accept complete LTSVisualizer graph documents and lightweight documents containing `nodes` and `edges`.
+- Reopen selected-path JSON exports as regular graphs.
+- Preserve transition labels and colors such as `darkorange` or `#darkorange`.
+- Preserve structured and raw state markings.
+- Preserve structured and raw transition inputs and outputs.
+- Distinguish parallel transitions using unique edge IDs.
+
+LTSVisualizer does not import PlantUML files. PlantUML remains available only as an export format for selected paths.
 
 ### Graph exploration
 
-- Explore one-, two-, or three-hop neighborhoods around a selected state.
-- Search directly for a state by ID.
-- Display the complete graph using **Show all**.
+- Search for a state by ID.
+- Explore one-, two-, or three-hop neighborhoods around a focused state.
+- Display the complete graph with **Show all**.
 - Switch between hierarchical and grid layouts.
 - Show or hide transition labels.
 - Pan, zoom, select, and manually reposition states.
@@ -44,8 +74,9 @@ LTSVisualizer supports small linear graphs and large cyclic state spaces contain
 ### Inspection
 
 - Inspect state markings by hovering over or selecting states.
-- Inspect consumed transition inputs and produced transition outputs by hovering over or selecting transitions.
-- Inspect both structured and raw transition semantic data through the JSON viewer.
+- Inspect consumed inputs and produced outputs by hovering over or selecting transitions.
+- Inspect structured and raw semantic data through an expandable JSON viewer.
+- Expand or collapse nested data and copy inspector data as JSON.
 - Pin inspector content while continuing to explore the graph.
 - Clear pinned inspector content without clearing a selected path.
 
@@ -53,162 +84,31 @@ LTSVisualizer supports small linear graphs and large cyclic state spaces contain
 
 - Start a path from the currently focused state.
 - Extend a path by selecting a highlighted successor state.
-- Select an exact transition using the **Choose next transition** controls.
-- Distinguish parallel transitions using unique edge IDs.
-- Support loops and repeated state occurrences.
+- Select an exact edge through **Choose next transition**.
+- Distinguish parallel and identically named transitions by edge ID.
+- Support loops, repeated states, and repeated edge traversals.
 - Undo the most recent transition.
 - Restart or clear the selected path.
-- Keep transition labels visible while constructing a path.
-- Preserve graph zoom, pan, and manually adjusted state positions.
+- Preserve graph zoom, pan, and manually adjusted state positions while constructing a path.
 
-### Path export
+### Export
 
+- Export the complete loaded graph as JSON, independently of the visible neighborhood or selected path.
+- Export a selected path as a self-contained JSON document.
 - Export a selected path as PlantUML.
-- Export a selected path as JSON.
-- Preserve exact transition order.
-- Preserve loops and repeated transition traversals.
-- Preserve parallel-edge identity.
-- Preserve state markings, transition inputs, transition outputs, labels, and colors.
-- Reopen exported PlantUML paths.
-- Reopen exported JSON as a regular graph.
+- Preserve exact transition order, loops, repeated traversals, and parallel-edge identity.
+- Preserve state markings, transition inputs, transition outputs, raw semantic values, labels, and colors.
 
-### Deployment
+## Sample data
 
-- Run JSON workflows entirely in the browser.
-- Run in development mode with Vite and the optional FastAPI backend.
-- Run in combined production mode from one local server.
-- Download a portable Windows binary without installing a development environment.
+The repository includes:
 
-## Download for Windows
-
-Download the latest portable Windows version from:
-
-<https://github.com/dbera/LTSVisualizer/releases/latest>
-
-Python, Node.js, npm, and a development environment are not required.
-
-### Installation
-
-1. Download `LTSVisualizer-Windows-x64.zip` from the official GitHub Release.
-2. Open PowerShell in the directory containing the downloaded ZIP.
-3. Remove the Windows internet-download restriction:
-
-   ```powershell
-   Unblock-File .\LTSVisualizer-Windows-x64.zip
-   ```
-
-4. Extract the complete ZIP file.
-5. Open the extracted directory.
-6. Run:
-
-   ```text
-   LTSVisualizer.exe
-   ```
-
-7. Keep the `_internal` directory beside `LTSVisualizer.exe`. The application will not run correctly without it.
-
-LTSVisualizer starts a local server and opens the dashboard automatically in the default browser.
-
-### Verify the download
-
-The GitHub Release includes a file named `SHA256SUMS.txt`.
-
-Calculate the SHA-256 checksum of the downloaded ZIP:
-
-```powershell
-Get-FileHash .\LTSVisualizer-Windows-x64.zip -Algorithm SHA256
-```
-
-Compare the displayed hash with the value in `SHA256SUMS.txt`. The two values must match.
-
-Only run binaries downloaded from the official LTSVisualizer Releases page.
-
-### Windows SmartScreen notice
-
-LTSVisualizer is currently distributed as an unsigned Windows application. Microsoft Defender SmartScreen may display a **Windows protected your PC** warning.
-
-If the ZIP was downloaded from the official GitHub Release and the SHA-256 checksum matches:
-
-1. Select **More info** in the SmartScreen window.
-2. Confirm that the application name is `LTSVisualizer.exe`.
-3. Select **Run anyway**, if permitted by the Windows security policy.
-
-Some managed or corporate Windows systems may prevent unsigned applications from running. In that case, contact the system administrator.
-
-### Optional graphical unblock method
-
-Depending on the Windows configuration, the downloaded ZIP may provide an **Unblock** option:
-
-1. Right-click `LTSVisualizer-Windows-x64.zip`.
-2. Select **Properties**.
-3. On the **General** tab, select **Unblock**, if available.
-4. Select **Apply**.
-5. Extract the ZIP after unblocking it.
-
-If the **Unblock** option is not shown or does not work, use:
-
-```powershell
-Unblock-File .\LTSVisualizer-Windows-x64.zip
-```
-
-## Supported input formats
-
-Select **Open LTS Graph File** to open a graph.
-
-The file picker accepts:
-
-```text
-.json
-.puml
-.plantuml
-.txt
-```
-
-### JSON input
-
-JSON graphs are parsed and validated directly in the browser.
-
-The FastAPI backend is not required for:
-
-- Opening JSON graphs
-- Exploring graphs
-- Inspecting markings, transition inputs, and transition outputs
-- Selecting paths
-- Exporting the complete graph as JSON
-- Exporting selected paths as JSON
-- Exporting selected paths as PlantUML
-
-### PlantUML input
-
-PlantUML graph files are sent to the FastAPI backend for parsing.
-
-If the backend is unavailable, JSON workflows continue to work. PlantUML import displays an error explaining that FastAPI must be started.
-
-## PlantUML input example
-
-LTSVisualizer accepts PlantUML graph edges in the following form:
-
-```plantuml
-@startuml
-'Transition Inputs: {v_p0 -> '{"unit": 0}'}
-'Marking (State): {p0={'{"unit": 0}'}}
-(0) --> (1): RootConcreteTSpec_ExecutePrinter_0
-
-'Transition Inputs: {v_p1 -> '{"unit": 0}'}
-'Marking (State): {ctx={'{"id": 1}'}, p1={'{"unit": 0}'}}
-(1) -[#darkorange]-> (2): RootRESPONSE_Activation
-
-title State space: 3 nodes and 2 edges
-@enduml
-```
-
-The semantic comments are optional. A file containing only states, edges, and transition labels can still be visualized.
+- `sample-data/example.json`: a small graph for quick checks.
+- `sample-data/rg_imaging.json`: a larger, realistic reachability graph.
 
 ## JSON input format
 
-LTSVisualizer JSON documents use explicit nodes and edges.
-
-A complete graph document has this structure:
+A complete LTSVisualizer graph document has explicit nodes and edges:
 
 ```json
 {
@@ -224,9 +124,7 @@ A complete graph document has this structure:
       "marking_raw": null,
       "marking": {
         "input": [
-          {
-            "id": 42
-          }
+          { "id": 42 }
         ]
       }
     },
@@ -235,9 +133,7 @@ A complete graph document has this structure:
       "marking_raw": null,
       "marking": {
         "processing": [
-          {
-            "id": 42
-          }
+          { "id": 42 }
         ]
       }
     }
@@ -251,16 +147,12 @@ A complete graph document has this structure:
       "color": "darkorange",
       "inputs_raw": null,
       "inputs": {
-        "request": {
-          "id": 42
-        }
+        "request": { "id": 42 }
       },
       "outputs_raw": null,
       "outputs": {
         "processing": [
-          {
-            "id": 42
-          }
+          { "id": 42 }
         ]
       }
     }
@@ -272,9 +164,9 @@ A complete graph document has this structure:
 
 Each node contains:
 
-- `id`: Unique state identifier.
-- `marking`: Optional structured state marking.
-- `marking_raw`: Optional original marking text.
+- `id`: unique state identifier.
+- `marking`: optional structured state marking.
+- `marking_raw`: optional original marking text.
 
 Example:
 
@@ -284,9 +176,7 @@ Example:
   "marking_raw": null,
   "marking": {
     "requests": [
-      {
-        "id": 100
-      }
+      { "id": 100 }
     ]
   }
 }
@@ -296,15 +186,15 @@ Example:
 
 Each edge contains:
 
-- `id`: Unique edge identifier.
-- `source`: Source node ID.
-- `target`: Target node ID.
-- `transition`: Transition name.
-- `color`: Optional transition color.
-- `inputs`: Optional structured transition-input bindings.
-- `inputs_raw`: Optional original transition-input text.
-- `outputs`: Optional structured transition-output flow. Each key is an output place and each value is an array of produced tokens.
-- `outputs_raw`: Optional original transition-output text.
+- `id`: unique edge identifier.
+- `source`: source node ID.
+- `target`: target node ID.
+- `transition`: transition name.
+- `color`: optional transition color.
+- `inputs`: optional structured transition-input bindings.
+- `inputs_raw`: optional original transition-input text.
+- `outputs`: optional structured transition-output flow. Each key is an output place and each value is an array of produced tokens.
+- `outputs_raw`: optional original transition-output text.
 
 Example:
 
@@ -317,50 +207,38 @@ Example:
   "color": null,
   "inputs_raw": null,
   "inputs": {
-    "request": {
-      "id": 100
-    }
+    "request": { "id": 100 }
   },
   "outputs_raw": "{completed={'{\"id\": 100}'}}",
   "outputs": {
     "completed": [
-      {
-        "id": 100
-      }
+      { "id": 100 }
     ]
   }
 }
 ```
 
-The edge ID identifies the exact edge. Connectivity is represented separately by `source` and `target`.
+The edge ID identifies the exact edge. Connectivity is represented separately by `source` and `target`, allowing parallel edges even when source, target, and transition name are identical.
 
-This allows LTSVisualizer to distinguish parallel edges, including multiple transitions with identical source, target, and transition names.
-
-`outputs` represents the tokens produced by the transition firing, not the complete target-state marking. Token order and duplicate token occurrences are preserved in the arrays.
+`outputs` represents the tokens produced by the transition firing, not the complete target-state marking. Token order and duplicate occurrences are preserved.
 
 Missing and explicitly empty output data have different meanings:
 
-- `"outputs": null` means that transition-output information was not supplied, as in older JSON documents.
-- `"outputs": {}` means that the output flow was supplied and is known to be empty.
-- The same distinction applies to `outputs_raw`: `null` means unavailable, while `"{}"` is a known empty raw output flow.
+- `"outputs": null` means output information was not supplied.
+- `"outputs": {}` means the supplied output flow is known to be empty.
+- The same distinction applies to `outputs_raw`: `null` means unavailable, while `"{}"` represents a known empty raw output flow.
 
-Older JSON files that omit `outputs` and `outputs_raw` remain supported. The parser normalizes omitted optional fields to `null`.
+Older JSON files that omit `outputs` and `outputs_raw` remain supported. Missing optional semantic fields are normalized to `null`.
 
 ### Lightweight graph documents
 
-The format envelope is optional for imported JSON.
-
-This is also accepted:
+The format envelope is optional when importing JSON:
 
 ```json
 {
   "nodes": [
-    {
-      "id": "0"
-    },
-    {
-      "id": "1"
-    }
+    { "id": "0" },
+    { "id": "1" }
   ],
   "edges": [
     {
@@ -373,11 +251,9 @@ This is also accepted:
 }
 ```
 
-Omitted optional semantic fields are normalized to `null`.
-
 ## Selected-path JSON format
 
-A selected-path JSON export contains a self-contained graph subset and an ordered path:
+A selected-path export contains a self-contained graph subset and an ordered path:
 
 ```json
 {
@@ -418,16 +294,12 @@ A selected-path JSON export contains a self-contained graph subset and an ordere
   ],
   "path": {
     "startNodeId": "0",
-    "edgeIds": [
-      "edge-1"
-    ]
+    "edgeIds": ["edge-1"]
   }
 }
 ```
 
-The `nodes` and `edges` arrays describe the graph subset.
-
-The ordered `path.edgeIds` array describes the exact traversal. It preserves:
+The `nodes` and `edges` arrays describe unique graph elements. The ordered `path.edgeIds` array describes the exact traversal and preserves:
 
 - Transition order
 - Parallel-edge identity
@@ -435,141 +307,63 @@ The ordered `path.edgeIds` array describes the exact traversal. It preserves:
 - Loops
 - Repeated state occurrences
 
-## Unique graph elements and traversal occurrences
+For example, the traversal `0 -> 1 -> 0 -> 1` contains four state occurrences and three transition steps, even if its graph subset contains only two unique states and two unique edges.
 
-A path may visit the same state or traverse the same edge multiple times.
-
-For example:
-
-```text
-0 -> 1 -> 0 -> 1
-```
-
-This traversal contains:
-
-```text
-4 state occurrences
-3 transition steps
-```
-
-However, the graph may contain only:
-
-```text
-2 unique states
-2 unique edges
-```
-
-Selected-path JSON stores each node and edge once in the graph arrays. Repeated traversal steps are preserved in `path.edgeIds`.
-
-When an exported selected-path JSON file is reopened, LTSVisualizer loads the contained nodes and edges as a regular graph. Search, neighborhood, layout, labels, and **Show all** remain available.
+When a selected-path JSON file is reopened, LTSVisualizer loads its graph subset as a regular graph. Search, neighborhoods, layouts, labels, and **Show all** remain available.
 
 ## Using the dashboard
 
 ### Open a graph
 
-1. Open the dashboard.
+1. Open the online application or `LTSVisualizer.html`.
 2. Select **Open LTS Graph File**.
-3. Choose a supported PlantUML or JSON file.
-4. Wait for the graph to load.
+3. Choose a `.json` graph file.
+4. Wait for validation and rendering to complete.
+
+Graph data remains in the browser and is not uploaded to a server.
 
 ### Explore a graph
 
-1. Enter a state ID to focus on a particular state.
+1. Enter a state ID to focus on that state.
 2. Use **1 hop**, **2 hops**, or **3 hops** to control neighborhood depth.
 3. Use **Show all** to display the complete graph.
 4. Switch between **Hierarchical** and **Grid** layouts.
 5. Toggle transition labels for readability and performance.
-6. Hover over graph elements to inspect state markings or transition inputs and outputs.
-7. Select a state or transition to pin its data in the inspector.
-8. Drag states to adjust their positions.
+6. Hover over a graph element to inspect its semantic data.
+7. Select a state or transition to pin its inspector data.
+8. Drag states to adjust positions.
 9. Drag the background to pan.
 10. Use the mouse wheel to zoom.
 
-For very large graphs, neighborhood exploration is recommended instead of displaying every node and transition simultaneously.
+For very large graphs, neighborhood exploration is recommended instead of displaying every state and transition simultaneously.
 
-## Manual path selection
-
-### Start a path
+### Select a path
 
 1. Search for or focus the desired starting state.
 2. Select **Select path**.
-3. The focused state becomes the start of the path.
+3. Extend the path by selecting a highlighted successor state or an exact edge under **Choose next transition**.
 
 Path colors are:
 
-```text
-Green   Path start
-Blue    Selected path
-Orange  Current endpoint
-Cyan    Available next states and transitions
-```
+- **Green**: path start
+- **Blue**: selected path
+- **Orange**: current endpoint
+- **Cyan**: available next states and transitions
 
-### Extend a path
+Use **Choose next transition** when multiple or parallel transitions lead to the same state, when transitions have identical names, or when an edge is difficult to select directly.
 
-Use either of these methods:
-
-- Select a cyan successor state when the connecting transition is unambiguous.
-- Select an exact transition using **Choose next transition**.
-
-The transition controls are recommended when:
-
-- Multiple transitions lead to the same state.
-- Parallel transitions have identical names.
-- A graph edge is difficult to select directly.
-
-Each transition is selected by its unique edge ID.
-
-### Loops and repeated states
-
-Paths may revisit earlier states and traverse edges repeatedly.
-
-Selecting a transition back to an earlier state creates a loop. It does not rewind the path.
-
-### Undo and clear
+Selecting a transition back to an earlier state creates a loop. It does not rewind the traversal.
 
 - **Undo** removes the most recently selected transition.
-- **Restart path** discards the current path and starts a new selection.
+- **Restart path** discards the current traversal and starts a new selection.
 - **Clear path** exits path-selection mode.
-- The Inspector's clear action only unpins inspected data and does not clear the selected path.
+- The Inspector's clear action only unpins inspector content.
 
-## Export a selected path
+## Export behavior
 
-The Path controls provide:
+### Export a selected path as JSON
 
-```text
-Export .puml
-Export .json
-```
-
-### PlantUML path export
-
-PlantUML export creates a graph that can be reopened in LTSVisualizer.
-
-The export preserves:
-
-- Selected states
-- Selected transitions
-- Transition order
-- Transition labels
-- Transition colors
-- State markings
-- Transition inputs
-- Transition outputs
-- Raw transition inputs and outputs when available
-
-For transitions with available output information, the PlantUML path contains a machine-readable comment without changing the rendered diagram:
-
-```plantuml
-'Transition Outputs: {completed={'{"id": 100}'}}
-```
-
-A known empty output flow is exported as `'Transition Outputs: {}`. The comment is omitted for older graphs where output information is unavailable.
-
-### JSON path export
-
-JSON export creates a self-contained selected-path document.
-
-The export preserves:
+The JSON path export preserves:
 
 - Unique graph nodes and edges
 - Exact ordered edge IDs
@@ -578,53 +372,42 @@ The export preserves:
 - State markings
 - Transition inputs and outputs
 - Raw markings, inputs, and outputs
-- Transition colors
+- Transition labels and colors
 
-Exported JSON files can be reopened without running the backend.
+Exported selected-path JSON files can be reopened as regular graphs.
 
-## Export the complete graph as JSON
+### Export a selected path as PlantUML
 
-Select **Export graph JSON** to export every state and transition in the currently loaded graph.
+The PlantUML export preserves selected states and transitions, transition order, labels, colors, state markings, transition inputs, and transition outputs.
 
-The export uses the complete loaded graph, regardless of:
+When output information is available, the export includes a machine-readable comment:
 
-- The currently visible neighborhood
-- The selected state
+```plantuml
+'Transition Outputs: {completed={'{"id": 100}'}}
+```
+
+A known empty output flow is exported as:
+
+```plantuml
+'Transition Outputs: {}
+```
+
+The output comment is omitted when output information is unavailable.
+
+PlantUML files exported by LTSVisualizer are intended for PlantUML-compatible tools. LTSVisualizer itself does not import PlantUML files.
+
+### Export the complete graph as JSON
+
+Select **Export graph JSON** to export every state and transition in the loaded graph. The export is independent of:
+
+- The visible neighborhood
+- The focused state
 - Whether **Show all** is active
-- The currently selected path
+- The selected path
 
-The generated JSON preserves:
+The export preserves all unique states and transitions, parallel edges, semantic data, labels, colors, and graph counts. Its filename is derived safely from the opened JSON filename.
 
-- All unique states
-- All unique transitions
-- Parallel edges
-- State markings and raw markings
-- Transition inputs and raw inputs
-- Transition outputs and raw outputs
-- Transition labels
-- Transition colors
-- Graph state and transition counts
-
-The filename is derived from the opened source file and made safe for downloading.
-
-Examples:
-
-```text
-example.puml       -> example.json
-my graph.puml      -> my-graph.json
-rg.plantuml.txt    -> rg.plantuml.json
-```
-
-This enables a backend-independent workflow:
-
-```text
-PlantUML file
-  -> FastAPI parsing
-  -> Export graph JSON
-  -> Reopen JSON later without FastAPI
-```
-
-A complete graph JSON export has document type `graph` and includes graph counts in its metadata:
+A complete graph export has document type `graph` and includes counts in its metadata:
 
 ```json
 {
@@ -641,540 +424,193 @@ A complete graph JSON export has document type `graph` and includes graph counts
 }
 ```
 
-The exported document contains the graph stored in memory, not only the nodes and transitions currently rendered by Cytoscape.js. A one-hop neighborhood can therefore be visible while **Export graph JSON** still exports the complete loaded graph.
+The document contains the complete graph held in memory, not only the elements currently rendered by Cytoscape.js.
 
 ## Architecture
 
-LTSVisualizer supports frontend-only JSON workflows and combined PlantUML workflows.
-
-### JSON workflow
-
 ```text
-JSON graph file
-  |
-  v
-React frontend
-  |
-  |-- JSON parsing and validation
-  |-- Cytoscape.js visualization
-  |-- Manual path selection
-  |-- Complete graph JSON export
-  |-- Selected-path JSON export
-  `-- Selected-path PlantUML export
+Local JSON graph file
+        |
+        v
+React and TypeScript application
+        |
+        |-- JSON parsing and validation
+        |-- Cytoscape.js visualization
+        |-- Search and neighborhood exploration
+        |-- Structured semantic-data inspection
+        |-- Manual path selection
+        |-- Complete-graph JSON export
+        |-- Selected-path JSON export
+        `-- Selected-path PlantUML export
 ```
 
-The JSON workflow runs completely in the browser.
+All graph processing occurs in the browser. There is no application backend or API.
 
-### PlantUML development workflow
+Two production build targets are maintained:
 
-```text
-Browser
-  |
-  v
-Vite development server :5173
-  |
-  |  proxies /graph requests
-  v
-FastAPI development server :8000
-  |
-  `-- PlantUML parsing
-```
-
-Vite provides hot module replacement for frontend development. Requests beginning with `/graph` are forwarded to FastAPI by `frontend/vite.config.ts`.
-
-### Combined production and packaged mode
-
-```text
-Browser
-  |
-  v
-FastAPI and Uvicorn :8765
-  |-- React production files
-  |-- GET  /api/health
-  |-- GET  /graph
-  `-- POST /graph/upload
-```
-
-The React production build is generated in `frontend/dist` and served by FastAPI.
-
-`backend/launcher.py` selects an available local port, starts Uvicorn, and opens the dashboard in the default browser.
+- The standard Vite build in `frontend/dist` for static web hosting and GitHub Pages.
+- The single-file build in `frontend/dist-offline` for a double-clickable offline `LTSVisualizer.html` release.
 
 ## Technology stack
-
-### Backend
-
-- Python 3.11 or newer
-- FastAPI
-- Uvicorn
-- Pydantic
-- python-multipart
-- pytest
-- HTTPX
-- PyInstaller
-
-### Frontend
 
 - React
 - TypeScript
 - Vite
 - Cytoscape.js
-- Axios
 - Vitest
-
-### Automation
-
-- GitHub Actions for continuous integration
-- GitHub Actions for Windows binary builds
-- GitHub Releases for downloadable ZIP packages and checksums
+- Oxlint
+- vite-plugin-singlefile
+- GitHub Actions
+- GitHub Pages
 
 ## Project structure
 
 ```text
 LTSVisualizer/
-├── .github/
-│   ├── ISSUE_TEMPLATE/
-│   ├── pull_request_template.md
-│   └── workflows/
-│       ├── ci.yml
-│       └── release.yml
-├── backend/
-│   ├── app/
-│   │   ├── models/
-│   │   │   └── graph_model.py
-│   │   ├── parser/
-│   │   │   ├── puml_parser.py
-│   │   │   └── token_parser.py
-│   │   └── main.py
-│   ├── tests/
-│   │   ├── test_api.py
-│   │   ├── test_puml_parser.py
-│   │   └── test_token_parser.py
-│   ├── launcher.py
-│   ├── requirements.txt
-│   └── requirements-dev.txt
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── JsonViewer.css
-│   │   │   ├── JsonViewer.tsx
-│   │   │   ├── PathSelectionControls.css
-│   │   │   └── PathSelectionControls.tsx
-│   │   ├── graph/
-│   │   │   ├── graphJson.test.ts
-│   │   │   ├── graphJson.ts
-│   │   │   ├── pathExport.test.ts
-│   │   │   ├── pathExport.ts
-│   │   │   ├── pathSelection.test.ts
-│   │   │   └── pathSelection.ts
-│   │   ├── App.css
-│   │   ├── App.tsx
-│   │   ├── index.css
-│   │   └── main.tsx
-│   ├── package.json
-│   ├── package-lock.json
-│   └── vite.config.ts
-├── sample-data/
-├── LTSVisualizer.spec
-├── .editorconfig
-├── .gitattributes
-├── .gitignore
-├── CHANGELOG.md
-├── CODE_OF_CONDUCT.md
-├── CONTRIBUTING.md
-├── LICENSE
-├── README.md
-└── SECURITY.md
+|-- .github/
+|   |-- dependabot.yml
+|   |-- ISSUE_TEMPLATE/
+|   |-- pull_request_template.md
+|   `-- workflows/
+|       |-- ci.yml
+|       |-- pages.yml
+|       `-- release.yml
+|-- frontend/
+|   |-- public/
+|   |-- src/
+|   |   |-- components/
+|   |   |-- graph/
+|   |   |-- App.css
+|   |   |-- App.tsx
+|   |   |-- index.css
+|   |   `-- main.tsx
+|   |-- index.html
+|   |-- package.json
+|   |-- package-lock.json
+|   |-- vite.config.ts
+|   `-- vite.offline.config.ts
+|-- sample-data/
+|   |-- example.json
+|   `-- rg_imaging.json
+|-- CHANGELOG.md
+|-- CONTRIBUTING.md
+|-- LICENSE
+|-- README.md
+`-- SECURITY.md
 ```
 
-The following directories are generated locally and intentionally ignored by Git:
+Generated directories are intentionally ignored by Git:
 
 ```text
-build/
-dist/
-release/
 frontend/dist/
+frontend/dist-offline/
 ```
 
 ## Developer prerequisites
 
-Install the following software before running or building the project locally:
-
-- Python 3.11 or newer
-- Node.js 22 LTS or newer
+- Node.js 22 or newer
 - npm
 - Git
 
-The backend is optional for frontend-only JSON development.
-
-Windows is required to build the Windows executable locally. GitHub Actions uses a Windows runner to produce official Windows release packages.
-
-## Clone the repository
+## Set up the project
 
 ```bash
 git clone https://github.com/dbera/LTSVisualizer.git
-cd LTSVisualizer
-```
-
-## Set up the frontend
-
-```bash
-cd frontend
+cd LTSVisualizer/frontend
 npm install
-cd ..
 ```
 
-For deterministic continuous-integration or release builds, use `npm ci` when `node_modules` is absent and `package-lock.json` is current.
-
-## Set up the backend
-
-The backend is required for PlantUML input, combined production mode, and Windows packaging.
-
-### Windows PowerShell
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r backend\requirements-dev.txt
-```
-
-### Linux or macOS
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r backend/requirements-dev.txt
-```
+For deterministic CI and release builds, use `npm ci` when `node_modules` is absent and `package-lock.json` is current.
 
 ## Run in development mode
 
-### Frontend-only JSON development
+From `frontend`:
 
-From the repository root:
-
-```powershell
-cd frontend
+```bash
 npm run dev
 ```
 
-Open the URL displayed by Vite, normally:
-
-```text
-http://localhost:5173
-```
-
-JSON input, exploration, inspection, path selection, complete-graph JSON export, and selected-path export work without starting FastAPI.
-
-PlantUML files cannot be opened while the backend is unavailable.
-
-### PlantUML development mode
-
-PlantUML development uses separate backend and frontend servers.
-
-#### Terminal 1: FastAPI backend
-
-From the repository root:
-
-```powershell
-cd backend
-uvicorn app.main:app --reload --port 8000
-```
-
-Backend API documentation is available at:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-The health endpoint is available at:
-
-```text
-http://127.0.0.1:8000/api/health
-```
-
-#### Terminal 2: Vite frontend
-
-From the repository root:
-
-```powershell
-cd frontend
-npm run dev
-```
-
-Open the URL displayed by Vite, normally:
-
-```text
-http://localhost:5173
-```
-
-During development, Vite proxies `/graph` requests to FastAPI on port `8000`.
-
-## Run in combined production mode
-
-Combined production mode serves both the built React frontend and the PlantUML API from FastAPI.
-
-### 1. Build the frontend
-
-From the repository root:
-
-```powershell
-cd frontend
-npm run build
-cd ..
-```
-
-Verify the build:
-
-```powershell
-Test-Path frontend\dist\index.html
-```
-
-Expected output:
-
-```text
-True
-```
-
-### 2. Start the combined application
-
-```powershell
-cd backend
-python launcher.py
-```
-
-The launcher normally opens:
-
-```text
-http://127.0.0.1:8765
-```
-
-If port `8765` is occupied, the launcher selects another available local port.
-
-Vite is not required in combined production mode.
-
-## API endpoints
-
-### Health endpoint
-
-```http
-GET /api/health
-```
-
-Example response:
-
-```json
-{
-  "status": "ok",
-  "application": "LTSVisualizer"
-}
-```
-
-### Parse the bundled development example
-
-```http
-GET /graph
-```
-
-### Upload and parse a PlantUML graph
-
-```http
-POST /graph/upload
-```
-
-The upload endpoint accepts multipart form data with a field named `file`.
-
-JSON files are not sent to this endpoint. JSON parsing is performed by the frontend.
+Open the URL printed by Vite, normally `http://localhost:5173`.
 
 ## Development checks
 
-### Backend tests
+From `frontend`:
 
-From the repository root in PowerShell:
-
-```powershell
-$env:PYTHONPATH = "backend"
-python -m pytest backend\tests -v
-```
-
-### Frontend tests
-
-```powershell
-cd frontend
-npm test
-```
-
-### Frontend lint and build
-
-```powershell
-cd frontend
-npm run lint
-npm run build
-cd ..
-```
-
-### Full local verification
-
-Before packaging or releasing:
-
-1. Run all backend tests.
-2. Run all frontend tests.
-3. Run frontend linting.
-4. Run the frontend production build.
-5. Start `backend/launcher.py`.
-6. Confirm the dashboard and `/api/health` load.
-7. Open a small PlantUML graph.
-8. Open a large PlantUML graph.
-9. Open a JSON graph with the backend stopped.
-10. Test search, neighborhoods, layouts, labels, dragging, and inspector data.
-11. Test manual path selection.
-12. Export and reopen a selected path as PlantUML.
-13. Export and reopen a selected path as JSON.
-14. Focus a small neighborhood and export the complete loaded graph as JSON.
-15. Stop the backend and reopen the complete graph JSON.
-16. Confirm that states outside the previously visible neighborhood are available.
-17. Confirm that markings, transition inputs, transition outputs, raw semantic values, colors, and parallel edges are preserved.
-18. Inspect a transition and confirm that `inputs`, `inputs_raw`, `outputs`, and `outputs_raw` are available.
-19. Export a selected path as PlantUML and confirm that available transition outputs appear as `'Transition Outputs:` comments.
-20. Confirm that known empty outputs remain `{}` and unavailable outputs remain `null` or are omitted from PlantUML comments.
-21. Confirm there are no browser-console errors.
-
-## Build the Windows application locally
-
-Windows is required for a local Windows build.
-
-### 1. Build the frontend
-
-```powershell
-cd frontend
-npm run build
-cd ..
-```
-
-### 2. Install development and packaging dependencies
-
-```powershell
-python -m pip install --upgrade -r backend\requirements-dev.txt
-```
-
-### 3. Run tests
-
-```powershell
-$env:PYTHONPATH = "backend"
-python -m pytest backend\tests -v
-
-cd frontend
+```bash
 npm test
 npm run lint
 npm run build
-cd ..
+npm run build:offline
 ```
 
-### 4. Build with PyInstaller
+The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, path selection, loops, repeated states, parallel edges, selected-path export, semantic data, and PlantUML path export.
 
-```powershell
-python -m PyInstaller --clean --noconfirm LTSVisualizer.spec
+## Build targets
+
+### Static web build
+
+From `frontend`:
+
+```bash
+npm run build
 ```
 
-The generated application is written to:
+Output:
 
 ```text
-dist/
-└── LTSVisualizer/
-    ├── LTSVisualizer.exe
-    └── _internal/
+frontend/dist/
 ```
 
-Run the local build with:
+This build uses the `/LTSVisualizer/` base path for GitHub Pages.
 
-```powershell
-.\dist\LTSVisualizer\LTSVisualizer.exe
+### Offline single-file build
+
+From `frontend`:
+
+```bash
+npm run build:offline
 ```
 
-Always test the complete `dist/LTSVisualizer` directory outside the repository before publishing it.
-
-Do not distribute only the EXE because `_internal` is required.
-
-## Create a local Windows release ZIP
-
-From the repository root:
-
-```powershell
-New-Item -ItemType Directory -Force release
-
-Compress-Archive `
-  -Path dist\LTSVisualizer\* `
-  -DestinationPath release\LTSVisualizer-Windows-x64.zip `
-  -Force
-```
-
-Generate a SHA-256 checksum:
-
-```powershell
-$hash = Get-FileHash `
-  release\LTSVisualizer-Windows-x64.zip `
-  -Algorithm SHA256
-
-"$($hash.Hash)  LTSVisualizer-Windows-x64.zip" |
-  Set-Content release\SHA256SUMS.txt
-```
-
-The release directory then contains:
+Output:
 
 ```text
-release/
-├── LTSVisualizer-Windows-x64.zip
-└── SHA256SUMS.txt
+frontend/dist-offline/index.html
 ```
+
+For release distribution, the workflow renames the file to `LTSVisualizer.html` and generates `SHA256SUMS.txt`.
+
+The offline configuration disables copying `frontend/public` and removes the external favicon reference so the release contains no required external assets.
 
 ## GitHub Actions
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs for pushes and pull requests targeting `main`.
+`.github/workflows/ci.yml` runs frontend checks on pushes and pull requests. It installs dependencies, runs tests, runs linting, and builds the standard frontend.
 
-The workflow:
+### GitHub Pages
 
-- Installs backend dependencies.
-- Compiles and imports the backend.
-- Runs backend tests.
-- Installs frontend dependencies.
-- Runs frontend tests.
-- Runs frontend linting.
-- Builds the frontend.
+`.github/workflows/pages.yml` builds `frontend/dist`, uploads the Pages artifact, and deploys the static site from `main`.
 
-### Windows release build
+### Offline HTML release
 
-`.github/workflows/release.yml` runs:
+`.github/workflows/release.yml` runs manually or when a tag matching `v*` is pushed. It:
 
-- Manually through **Actions → Build Windows release → Run workflow**.
-- Automatically when a tag matching `v*` is pushed.
-
-A manual run creates two temporary workflow artifacts:
-
-- `LTSVisualizer-Windows-x64`, which can be extracted and run directly.
-- `LTSVisualizer-release-files`, which contains the release ZIP and checksum.
-
-A tag-triggered run also publishes a GitHub Release containing:
-
-```text
-LTSVisualizer-Windows-x64.zip
-SHA256SUMS.txt
-```
+1. Installs frontend dependencies.
+2. Runs tests and linting.
+3. Builds the offline single-file application.
+4. Renames the output to `LTSVisualizer.html`.
+5. Generates `SHA256SUMS.txt`.
+6. Uploads both files as a workflow artifact.
+7. Publishes both files to a GitHub Release for tag-triggered runs.
 
 ## Publish a release
 
-### 1. Prepare the release
-
-- Update `CHANGELOG.md`.
-- Update `README.md` when user-facing behavior changes.
-- Run all backend and frontend checks.
-- Verify the local or manual GitHub Actions build.
-- Commit and push all release changes to `main`.
-- Wait for continuous integration to pass.
-
-### 2. Synchronize the local branch
+1. Update `CHANGELOG.md` and user-facing documentation.
+2. Run all frontend checks.
+3. Manually run **Build offline HTML release** and verify the downloaded file through a `file:///` URL.
+4. Commit and push release changes to `main`.
+5. Wait for continuous integration to pass.
+6. Synchronize the local branch:
 
 ```powershell
 git switch main
@@ -1182,37 +618,27 @@ git pull origin main
 git status
 ```
 
-The working tree must be clean.
-
-### 3. Create and push an annotated tag
-
-Replace the version number as appropriate:
+7. Create and push an annotated version tag:
 
 ```powershell
-git tag -a v0.3.0 -m "LTSVisualizer 0.3.0"
-git push origin v0.3.0
+git tag -a v0.4.0 -m "LTSVisualizer 0.4.0"
+git push origin v0.4.0
 ```
 
-Pushing the tag triggers the Windows release workflow.
-
-When the workflow succeeds, the release is published at:
-
-<https://github.com/dbera/LTSVisualizer/releases>
+The tag triggers the offline HTML release workflow and publishes `LTSVisualizer.html` and `SHA256SUMS.txt` to the corresponding GitHub Release.
 
 ## Current limitations
 
-- The PlantUML parser targets the reachability-graph convention described above rather than every PlantUML diagram type.
-- PlantUML input requires the FastAPI backend.
-- JSON input works without the backend.
+- Only JSON graph input is supported.
+- PlantUML is an export-only format.
 - Extremely large full-graph views can be visually dense even when rendering remains responsive.
-- Global force-directed layouts are intentionally avoided for large state spaces because they can be computationally expensive in the browser.
-- Uploaded PlantUML files are parsed in memory and are not intended to be permanently stored by the backend.
-- The Windows executable is unsigned and may trigger Microsoft Defender SmartScreen.
-- The current automated binary release targets Windows x64 only.
+- Global force-directed layouts are intentionally avoided because they can be computationally expensive in the browser.
+- The offline release depends on browser support for local `file:///` applications and file selection.
+- GitHub Pages availability depends on successful processing by GitHub's deployment service.
 
 ## Roadmap
 
-Planned development priorities:
+Planned priorities:
 
 1. Refactor graph loading, shared graph types, Cytoscape integration, and visualization logic.
 2. Experiment with constrained graph search.
@@ -1234,26 +660,18 @@ Additional potential improvements include:
 - State-to-state marking differences
 - Token-journey visualization
 - Transition-frequency analytics
-- Authenticode signing for Windows releases
-- Additional operating-system packages
 
 ## Contributing
 
-Contributions, bug reports, and feature suggestions are welcome.
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development and pull-request guidelines.
+Contributions, bug reports, and feature suggestions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development and pull-request guidelines.
 
 ## Security
 
-Please do not disclose security vulnerabilities through public GitHub issues.
-
-See [`SECURITY.md`](SECURITY.md) for the reporting process.
+Do not disclose security vulnerabilities through public GitHub issues. See [`SECURITY.md`](SECURITY.md) for the reporting process.
 
 ## License
 
-This project is licensed under the MIT License.
-
-See [`LICENSE`](LICENSE) for details.
+This project is licensed under the MIT License. See [`LICENSE`](LICENSE) for details.
 
 ## Author
 

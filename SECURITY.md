@@ -2,19 +2,26 @@
 
 ## Supported versions
 
-LTSVisualizer is currently under active development and has not yet reached a stable major release.
+LTSVisualizer is under active development and has not yet reached a stable major release.
 
-Security fixes are applied to the latest version of the `main` branch. Older commits, forks, and unofficial builds are not actively supported.
+Security fixes are applied to the latest version of the `main` branch. Older commits, older releases, forks, and unofficial builds are not actively supported.
 
 | Version | Supported |
-| --- | --- |
+|---|---|
 | Latest `main` branch | Yes |
+| Latest official release | Yes |
 | Older commits or releases | No |
-| Third-party forks | No |
+| Third-party forks or unofficial builds | No |
 
 ## Reporting a vulnerability
 
-Please do not report suspected security vulnerabilities through public GitHub issues, discussions, pull requests, or social-media posts.
+Do not report suspected security vulnerabilities through:
+
+- Public GitHub issues
+- GitHub Discussions
+- Pull requests
+- Social-media posts
+- Public chat messages
 
 Use GitHub's private vulnerability-reporting feature for this repository when available:
 
@@ -24,97 +31,106 @@ Use GitHub's private vulnerability-reporting feature for this repository when av
 
 Repository:
 
-<https://github.com/dbera/LTSVisualizer>
+```text
+https://github.com/dbera/LTSVisualizer
+```
 
-If private vulnerability reporting is not available, contact the repository owner through the contact method listed on the GitHub profile. Do not include sensitive exploit details in a public message.
+If private vulnerability reporting is unavailable, contact the repository owner through the contact method listed on the GitHub profile. Do not include sensitive exploit details in a public message.
 
 ## Information to include
 
 A useful vulnerability report should include:
 
-- A clear description of the vulnerability.
-- The affected LTSVisualizer version or commit hash.
-- The affected component, such as the PlantUML parser, upload endpoint, FastAPI backend, or React frontend.
-- The operating system and browser used during testing.
-- Exact steps required to reproduce the issue.
-- A minimal proof of concept, when safe to provide.
-- The potential security impact.
-- Any known mitigations or suggested fixes.
-- Whether the issue has been disclosed to anyone else.
+- A clear description of the vulnerability
+- The affected LTSVisualizer version, release, or commit hash
+- Whether the online application or offline `LTSVisualizer.html` is affected
+- The affected component, such as JSON validation, Cytoscape rendering, export generation, the offline build, or a GitHub Actions workflow
+- The operating system and browser used during testing
+- Exact reproduction steps
+- A minimal proof of concept, when safe to provide
+- The potential security impact
+- Any known mitigations or suggested corrections
+- Whether the issue has been disclosed to anyone else
 
-Please remove confidential, proprietary, personal, or unrelated data from all reports and examples.
+Remove confidential, proprietary, personal, or unrelated information from all reports and examples.
+
+Do not attach a confidential graph file. Create a reduced synthetic example that demonstrates the issue safely.
 
 ## Expected response process
 
 The project maintainer will make a reasonable effort to:
 
-1. Acknowledge receipt of the report.
-2. Confirm whether the reported behavior can be reproduced.
-3. Assess severity and affected versions.
-4. Develop and test a correction when required.
-5. Coordinate disclosure after a fix or mitigation is available.
+- Acknowledge receipt of the report
+- Confirm whether the behavior can be reproduced
+- Assess severity and affected versions
+- Identify any affected online or offline distribution
+- Develop and test a correction when required
+- Coordinate disclosure after a fix or mitigation is available
 
-Response and resolution times depend on the complexity and severity of the issue. This project is maintained on a best-effort basis, so no guaranteed service-level response time is currently offered.
+Response and resolution times depend on the complexity and severity of the issue.
+
+LTSVisualizer is maintained on a best-effort basis. No guaranteed service-level response time is currently offered.
 
 ## Disclosure guidelines
 
-Please allow reasonable time for investigation and remediation before publicly disclosing a vulnerability.
+Allow reasonable time for investigation and remediation before publicly disclosing a vulnerability.
 
 Do not:
 
-- Access, modify, or delete data that does not belong to you.
-- Degrade or disrupt systems or services.
-- Perform denial-of-service testing.
-- Use social engineering, phishing, or physical attacks.
-- Test against installations without the owner's authorization.
-- Publish exploit details before coordinated disclosure.
+- Access, modify, or delete data that does not belong to you
+- Degrade or disrupt systems or services
+- Perform denial-of-service testing
+- Use social engineering, phishing, or physical attacks
+- Test systems or repositories without authorization
+- Publish exploit details before coordinated disclosure
+- Include confidential graph data in a report
+- Upload malicious demonstrations to public issues or pull requests
 
-Only test with files, systems, and environments that you own or are explicitly authorized to use.
+Only test with files, repositories, systems, and environments that you own or are explicitly authorized to use.
+
+## Application architecture
+
+LTSVisualizer is a static browser application.
+
+It has:
+
+- No application backend
+- No graph-upload API
+- No database
+- No persistent server-side graph storage
+- No Python runtime requirement
+- No executable installer
+
+Users can run LTSVisualizer:
+
+- As a statically hosted web application
+- As a self-contained `LTSVisualizer.html` file opened through `file:///`
+
+Graph files selected through the application are parsed and processed locally in the user's browser.
 
 ## Security considerations
 
-LTSVisualizer processes user-selected PlantUML text files and renders parsed graph content in a browser. Security-sensitive areas include:
+Security-sensitive areas include:
 
-- File-upload validation.
-- Input-size and resource limits.
-- Parsing of untrusted text and nested JSON values.
-- Browser rendering of transition labels and token data.
-- Dependency vulnerabilities in Python and npm packages.
-- Local-network exposure of the development server.
+- Parsing and validation of untrusted JSON documents
+- Processing very large or deeply nested graph documents
+- Rendering graph-provided labels and semantic values
+- Handling state markings and transition input and output data
+- Unique node and edge identifier validation
+- Source and target reference validation
+- Selected-path validation
+- Generation of JSON and PlantUML downloads
+- Browser behavior under `file:///`
+- npm dependency vulnerabilities
+- GitHub Actions workflow dependencies
+- Static GitHub Pages deployment
+- Integrity of downloadable offline release files
 
-The current application is intended primarily for trusted local development use. When running the application:
+### Untrusted JSON input
 
-- Bind the backend to localhost unless remote access is intentionally required.
-- Do not expose the development server directly to the public internet.
-- Review PlantUML files from untrusted sources before processing them.
-- Avoid uploading files containing confidential information to deployments you do not control.
-- Keep Python and npm dependencies up to date.
-- Run the application with a non-administrator account where practical.
+JSON files may contain malformed, misleading, excessively large, or deeply nested content.
 
-## Uploaded files and privacy
+Users should:
 
-The upload endpoint is intended to parse graph files in memory. Contributors should avoid adding persistent storage or logging of uploaded file contents unless that behavior is clearly documented and justified.
-
-PlantUML reachability graphs may contain domain data, token values, identifiers, or other sensitive information. Users are responsible for confirming that files are appropriate to process and share.
-
-## Dependency vulnerabilities
-
-Potential vulnerabilities in third-party dependencies can be reported privately through the process above. Reports should identify:
-
-- The affected package and version.
-- The relevant advisory or CVE, when available.
-- Whether the vulnerability is reachable in LTSVisualizer.
-- The recommended safe version.
-
-Automated dependency-update pull requests are welcome when they include successful backend tests and frontend build checks.
-
-## Security updates
-
-Confirmed vulnerabilities may be addressed through:
-
-- A commit to the `main` branch.
-- A GitHub Security Advisory.
-- A tagged release.
-- Updated installation or mitigation guidance.
-
-Public acknowledgements may be offered to reporters who request attribution, provided coordinated disclosure has been followed.
+- Open files only from trusted sources where practical
+- Avoid 
