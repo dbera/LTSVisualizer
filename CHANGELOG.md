@@ -4,7 +4,9 @@ All notable changes to LTSVisualizer are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/dbera/LTSVisualizer/compare/v0.3.0...HEAD)
+## [Unreleased](https://github.com/dbera/LTSVisualizer)
+
+## [0.4.0](https://github.com/dbera/LTSVisualizer) - 2026-08-06
 
 ### Added
 
