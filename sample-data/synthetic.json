@@ -1,0 +1,1039 @@
+{
+  "format": "ltsvisualizer",
+  "version": 1,
+  "type": "graph",
+  "metadata": {
+    "title": "SCC and terminal-state analysis sample",
+    "description": "Synthetic graph for testing terminal-state and strongly connected component analysis.",
+    "stateCount": 32,
+    "transitionCount": 41,
+    "expectedAnalysis": {
+      "terminalStateIds": [
+        "terminal-success",
+        "terminal-timeout",
+        "terminal-rejected",
+        "isolated-terminal"
+      ],
+      "cyclicComponentSizesDescending": [
+        8,
+        5,
+        3,
+        2,
+        1
+      ],
+      "statesInCyclicComponents": 19,
+      "largestCyclicComponentSize": 8
+    }
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "entry"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "route-a",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "routing"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "route-b",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "routing"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "bridge",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "connector"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "exit",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "connector"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 4
+          }
+        ]
+      }
+    },
+    {
+      "id": "terminal-success",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "terminal"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 100
+          }
+        ]
+      }
+    },
+    {
+      "id": "terminal-timeout",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "terminal"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 101
+          }
+        ]
+      }
+    },
+    {
+      "id": "terminal-rejected",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "terminal"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 102
+          }
+        ]
+      }
+    },
+    {
+      "id": "isolated-terminal",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "terminal"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 103
+          }
+        ]
+      }
+    },
+    {
+      "id": "A0",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-a"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 10
+          }
+        ]
+      }
+    },
+    {
+      "id": "A1",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-a"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 11
+          }
+        ]
+      }
+    },
+    {
+      "id": "A2",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-a"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 12
+          }
+        ]
+      }
+    },
+    {
+      "id": "A3",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-a"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 13
+          }
+        ]
+      }
+    },
+    {
+      "id": "A4",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-a"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 14
+          }
+        ]
+      }
+    },
+    {
+      "id": "A5",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-a"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 15
+          }
+        ]
+      }
+    },
+    {
+      "id": "A6",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-a"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 16
+          }
+        ]
+      }
+    },
+    {
+      "id": "A7",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-a"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 17
+          }
+        ]
+      }
+    },
+    {
+      "id": "B0",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-b"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 30
+          }
+        ]
+      }
+    },
+    {
+      "id": "B1",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-b"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 31
+          }
+        ]
+      }
+    },
+    {
+      "id": "B2",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-b"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 32
+          }
+        ]
+      }
+    },
+    {
+      "id": "B3",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-b"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 33
+          }
+        ]
+      }
+    },
+    {
+      "id": "B4",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-b"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 34
+          }
+        ]
+      }
+    },
+    {
+      "id": "C0",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-c"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 50
+          }
+        ]
+      }
+    },
+    {
+      "id": "C1",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-c"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 51
+          }
+        ]
+      }
+    },
+    {
+      "id": "C2",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-c"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 52
+          }
+        ]
+      }
+    },
+    {
+      "id": "D0",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-d"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 60
+          }
+        ]
+      }
+    },
+    {
+      "id": "D1",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "cycle-d"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 61
+          }
+        ]
+      }
+    },
+    {
+      "id": "SELF",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "self-loop"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 70
+          }
+        ]
+      }
+    },
+    {
+      "id": "tail-0",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "tail"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 80
+          }
+        ]
+      }
+    },
+    {
+      "id": "tail-1",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "tail"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 81
+          }
+        ]
+      }
+    },
+    {
+      "id": "tail-2",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "tail"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 82
+          }
+        ]
+      }
+    },
+    {
+      "id": "tail-3",
+      "marking_raw": null,
+      "marking": {
+        "phase": [
+          {
+            "name": "tail"
+          }
+        ],
+        "tokens": [
+          {
+            "value": 83
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-001",
+      "source": "start",
+      "target": "route-a",
+      "transition": "Initialize",
+      "color": "darkorange",
+      "inputs_raw": null,
+      "inputs": {
+        "request": {
+          "id": 1
+        }
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "route": [
+          {
+            "id": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "edge-002",
+      "source": "route-a",
+      "target": "A0",
+      "transition": "EnterLargeCycle",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": {
+        "route": {
+          "id": 1
+        }
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "cycleA": [
+          {
+            "id": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "edge-003",
+      "source": "start",
+      "target": "route-b",
+      "transition": "AlternativeRoute",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": {
+        "request": {
+          "id": 2
+        }
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "route": [
+          {
+            "id": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "edge-004",
+      "source": "route-b",
+      "target": "C0",
+      "transition": "EnterSmallCycle",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": {
+        "route": {
+          "id": 2
+        }
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "cycleC": [
+          {
+            "id": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "edge-005",
+      "source": "A0",
+      "target": "A1",
+      "transition": "A_Step_0",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-006",
+      "source": "A1",
+      "target": "A2",
+      "transition": "A_Step_1",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-007",
+      "source": "A2",
+      "target": "A3",
+      "transition": "A_Step_2",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-008",
+      "source": "A3",
+      "target": "A4",
+      "transition": "A_Step_3",
+      "color": "darkorange",
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-009",
+      "source": "A4",
+      "target": "A5",
+      "transition": "A_Step_4",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-010",
+      "source": "A5",
+      "target": "A6",
+      "transition": "A_Step_5",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-011",
+      "source": "A6",
+      "target": "A7",
+      "transition": "A_Step_6",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-012",
+      "source": "A7",
+      "target": "A0",
+      "transition": "A_Step_7",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-013",
+      "source": "A1",
+      "target": "A5",
+      "transition": "A_FastForward",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-014",
+      "source": "A6",
+      "target": "A2",
+      "transition": "A_Retry",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-015",
+      "source": "A4",
+      "target": "A0",
+      "transition": "A_Reset",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-016",
+      "source": "A7",
+      "target": "bridge",
+      "transition": "LeaveCycleA",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-017",
+      "source": "bridge",
+      "target": "B0",
+      "transition": "EnterCycleB",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-018",
+      "source": "B0",
+      "target": "B1",
+      "transition": "B_Step_0",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-019",
+      "source": "B1",
+      "target": "B2",
+      "transition": "B_Step_1",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-020",
+      "source": "B2",
+      "target": "B3",
+      "transition": "B_Step_2",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-021",
+      "source": "B3",
+      "target": "B4",
+      "transition": "B_Step_3",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-022",
+      "source": "B4",
+      "target": "B0",
+      "transition": "B_Step_4",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-023",
+      "source": "B3",
+      "target": "B1",
+      "transition": "B_Rework",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-024",
+      "source": "B4",
+      "target": "D0",
+      "transition": "EscalateToCycleD",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-025",
+      "source": "B2",
+      "target": "terminal-timeout",
+      "transition": "Timeout",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-026",
+      "source": "C0",
+      "target": "C1",
+      "transition": "C_Forward",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-027",
+      "source": "C1",
+      "target": "C2",
+      "transition": "C_Validate",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-028",
+      "source": "C2",
+      "target": "C0",
+      "transition": "C_Retry",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-029",
+      "source": "C2",
+      "target": "B0",
+      "transition": "PromoteToCycleB",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-030",
+      "source": "C1",
+      "target": "terminal-rejected",
+      "transition": "Reject",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-031",
+      "source": "D0",
+      "target": "D1",
+      "transition": "D_ProcessPrimary",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-032",
+      "source": "D0",
+      "target": "D1",
+      "transition": "D_ProcessAlternative",
+      "color": "darkorange",
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-033",
+      "source": "D1",
+      "target": "D0",
+      "transition": "D_Retry",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-034",
+      "source": "D1",
+      "target": "SELF",
+      "transition": "EnterSelfLoop",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-035",
+      "source": "SELF",
+      "target": "SELF",
+      "transition": "Heartbeat",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-036",
+      "source": "SELF",
+      "target": "exit",
+      "transition": "LeaveHeartbeat",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-037",
+      "source": "exit",
+      "target": "tail-0",
+      "transition": "BeginTail",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-038",
+      "source": "tail-0",
+      "target": "tail-1",
+      "transition": "TailStep1",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-039",
+      "source": "tail-1",
+      "target": "tail-2",
+      "transition": "TailStep2",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-040",
+      "source": "tail-2",
+      "target": "tail-3",
+      "transition": "TailStep3",
+      "color": null,
+      "inputs_raw": null,
+      "inputs": null,
+      "outputs_raw": null,
+      "outputs": null
+    },
+    {
+      "id": "edge-041",
+      "source": "tail-3",
+      "target": "terminal-success",
+      "transition": "Complete",
+      "color": "darkorange",
+      "inputs_raw": null,
+      "inputs": {
+        "completion": {
+          "status": "ok"
+        }
+      },
+      "outputs_raw": null,
+      "outputs": {}
+    }
+  ]
+}

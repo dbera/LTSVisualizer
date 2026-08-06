@@ -80,6 +80,27 @@ LTSVisualizer does not import PlantUML files. PlantUML remains available only as
 - Pin inspector content while continuing to explore the graph.
 - Clear pinned inspector content without clearing a selected path.
 
+### Graph analysis
+
+- Open the **Analysis** tab without affecting the Inspector.
+- Run analysis explicitly with **Run analysis**. Analysis is never started automatically when a graph is loaded.
+- Detect terminal states, defined as states with no outgoing transitions.
+- Compute strongly connected components using an iterative graph traversal that avoids recursive call-stack limits.
+- Classify an SCC as cyclic when it contains more than one state or when a singleton state has a self-loop.
+- Run graph analysis in an inline Web Worker so the browser interface remains responsive.
+- Cancel an analysis while it is running.
+- Ignore stale worker results after cancellation, reruns, or loading another graph.
+- Filter terminal states by state ID and browse large result sets in pages of 100.
+- Select a terminal state to open its current neighborhood view.
+- Filter cyclic components by minimum component size and browse results in pages of 100.
+- Select one cyclic component to display only its member states and internal transitions.
+- Clear a component-only view and return to normal neighborhood exploration.
+- Use the same analysis functionality in the hosted application and the offline `file:///` build.
+
+A terminal state is not automatically an error. Whether a terminal state represents successful completion or an unintended deadlock depends on the model. LTSVisualizer reports terminal states and does not attempt to classify their business meaning.
+
+Analysis results are held in browser memory for the currently loaded graph. They are reset when another graph is opened and are not added to graph or selected-path exports.
+
 ### Manual path selection
 
 - Start a path from the currently focused state.
@@ -105,6 +126,19 @@ The repository includes:
 
 - `sample-data/example.json`: a small graph for quick checks.
 - `sample-data/rg_imaging.json`: a larger, realistic reachability graph.
+- `sample-data/synthetic.json`: a synthetic graph for terminal-state and strongly connected component analysis.
+
+The expected analysis for `synthetic.json` is:
+
+```text
+States:                         32
+Transitions:                    41
+Terminal states:                 4
+Cyclic components:               5
+States in cyclic components:    19
+Largest cyclic component:        8
+Cyclic component sizes: 8, 5, 3, 2, 1
+```
 
 ## JSON input format
 
@@ -337,6 +371,19 @@ Graph data remains in the browser and is not uploaded to a server.
 
 For very large graphs, neighborhood exploration is recommended instead of displaying every state and transition simultaneously.
 
+### Analyze a graph
+
+1. Open the **Analysis** tab in the right-hand panel.
+2. Select **Run analysis**. Loading a graph or opening the tab does not start computation.
+3. Select **Cancel** if the analysis should be stopped.
+4. Review the terminal-state and cyclic-component summary.
+5. Expand **Terminal states** to filter and select a terminal state.
+6. Expand **Cyclic components** to filter by minimum size and select a component.
+7. Select **Clear component view** to return to normal neighborhood exploration.
+8. Select **Run again** to recompute the results for the current graph.
+
+For large graphs, worker execution prevents the analysis algorithm from blocking the main browser interface. Preparing and transferring graph topology still consumes browser memory, so analysis remains an explicit user action.
+
 ### Select a path
 
 1. Search for or focus the desired starting state.
@@ -438,6 +485,8 @@ React and TypeScript application
         |-- Cytoscape.js visualization
         |-- Search and neighborhood exploration
         |-- Structured semantic-data inspection
+        |-- On-demand terminal-state and SCC analysis
+        |   `-- Inline Web Worker with cancellation
         |-- Manual path selection
         |-- Complete-graph JSON export
         |-- Selected-path JSON export
@@ -480,6 +529,7 @@ LTSVisualizer/
 |   |-- src/
 |   |   |-- components/
 |   |   |-- graph/
+|   |   |-- workers/
 |   |   |-- App.css
 |   |   |-- App.tsx
 |   |   |-- index.css
@@ -491,7 +541,8 @@ LTSVisualizer/
 |   `-- vite.offline.config.ts
 |-- sample-data/
 |   |-- example.json
-|   `-- rg_imaging.json
+|   |-- rg_imaging.json
+|   `-- synthetic.json
 |-- CHANGELOG.md
 |-- CONTRIBUTING.md
 |-- LICENSE
@@ -543,7 +594,7 @@ npm run build
 npm run build:offline
 ```
 
-The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, path selection, loops, repeated states, parallel edges, selected-path export, semantic data, and PlantUML path export.
+The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, path selection, loops, repeated states, parallel edges, selected-path export, semantic data, PlantUML path export, terminal-state detection, iterative SCC computation, large synthetic graph topologies, and worker-controller lifecycle behavior.
 
 ## Build targets
 
@@ -633,15 +684,16 @@ The tag triggers the offline HTML release workflow and publishes `LTSVisualizer.
 - PlantUML is an export-only format.
 - Extremely large full-graph views can be visually dense even when rendering remains responsive.
 - Global force-directed layouts are intentionally avoided because they can be computationally expensive in the browser.
+- Terminal states are reported topologically and are not classified as successful completions or definite deadlocks.
+- Graph analysis uses a worker and is user-triggered, but very large graphs still require additional browser memory for topology transfer and analysis results.
 - The offline release depends on browser support for local `file:///` applications and file selection.
 - GitHub Pages availability depends on successful processing by GitHub's deployment service.
 
 ## Roadmap
 
-Planned priorities:
+Planned priority:
 
-1. Refactor graph loading, shared graph types, Cytoscape integration, and visualization logic.
-2. Experiment with constrained graph search.
+1. Experiment with constrained graph search.
 
 The constrained graph-search experiment may support:
 
@@ -655,8 +707,6 @@ The constrained graph-search experiment may support:
 
 Additional potential improvements include:
 
-- Deadlock-state detection
-- Strongly connected component analysis
 - State-to-state marking differences
 - Token-journey visualization
 - Transition-frequency analytics
