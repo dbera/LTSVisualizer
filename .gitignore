@@ -2,6 +2,7 @@ notes.txt
 
 # Local release packages
 release/
+frontend/dist-offline/
 
 # ============================================================
 # Python
