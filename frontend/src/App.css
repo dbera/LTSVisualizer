@@ -651,3 +651,64 @@ button.active {
   line-height: 1.25;
 }
 
+.computed-path-details li.active {
+  margin-left: -4px;
+  padding: 6px 7px;
+  border-left: 3px solid #2563eb;
+  border-radius: 4px;
+  background: #dbeafe;
+}
+
+.computed-step-transition,
+.computed-step-edge-id,
+.computed-step-route button {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  text-align: left;
+}
+
+.computed-step-transition {
+  display: block;
+  width: 100%;
+  color: #1e293b;
+  font-size: 11px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.computed-step-route {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 3px;
+  color: #64748b;
+}
+
+.computed-step-route button {
+  color: #2563eb;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.computed-step-edge-id {
+  display: block;
+  width: 100%;
+  margin-top: 3px;
+  color: #475569;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.computed-step-transition:hover,
+.computed-step-edge-id:hover,
+.computed-step-route button:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+

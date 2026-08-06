@@ -118,6 +118,7 @@ function App() {
   const [maximumVisitsPerState, setMaximumVisitsPerState] = useState(1);
   const [shownSearchPathIndex, setShownSearchPathIndex] = useState<number | null>(null);
   const [computedPathViewActive, setComputedPathViewActive] = useState(false);
+  const [focusedComputedStepKey, setFocusedComputedStepKey] = useState<string | null>(null);
   const [terminalStatesExpanded, setTerminalStatesExpanded] =
     useState(false);
   const [terminalStateFilter, setTerminalStateFilter] = useState("");
@@ -847,6 +848,7 @@ function App() {
     setHopCount(snapshot.hopCount);
     setOverviewLayout(snapshot.overviewLayout);
     setShownSearchPathIndex(null);
+    setFocusedComputedStepKey(null);
     setComputedPathViewActive(false);
     graphViewBeforeComputedPathRef.current = null;
     setStatus("Returned to the previous graph view");
@@ -867,6 +869,7 @@ function App() {
       updatePathMode("idle");
       showPathContext(selected);
       setShownSearchPathIndex(index);
+      setFocusedComputedStepKey(null);
       setComputedPathViewActive(true);
       window.setTimeout(() => {
         const cy = cyRef.current;
@@ -893,6 +896,7 @@ function App() {
     graphAnalysis.reset();
     pathSearch.reset();
     setShownSearchPathIndex(null);
+    setFocusedComputedStepKey(null);
     setComputedPathViewActive(false);
     graphViewBeforeComputedPathRef.current = null;
     setTerminalStatesExpanded(false);
@@ -1401,6 +1405,52 @@ function App() {
 
     const stateId = selectedStateId ?? graph.nodes[0]?.id;
     if (stateId) showNeighborhood(stateId, hopCount);
+  }
+
+  function focusComputedPathEdge(edgeId: string, stepKey: string) {
+    const cy = cyRef.current;
+    const edge = cy?.getElementById(edgeId);
+    if (!cy || !edge || edge.empty()) {
+      setStatus(`Transition ${edgeId} is not visible. Show the path first.`);
+      return;
+    }
+
+    cy.elements().unselect();
+    edge.select();
+    const info = makeEdgeInspector(edge);
+    pinnedInspectorRef.current = info;
+    setPinnedInspector(info);
+    setInspectorInfo(info);
+    setFocusedComputedStepKey(stepKey);
+    cy.animate({
+      center: { eles: edge },
+      duration: 250,
+    });
+    setStatus(`Focused transition ${edge.data("transition") ?? edgeId}`);
+  }
+
+  function focusComputedPathNode(nodeId: string, stepKey: string) {
+    const cy = cyRef.current;
+    const node = cy?.getElementById(nodeId);
+    if (!cy || !node || node.empty()) {
+      setStatus(`State ${nodeId} is not visible. Show the path first.`);
+      return;
+    }
+
+    cy.elements().unselect();
+    node.select();
+    const info = makeNodeInspector(node);
+    pinnedInspectorRef.current = info;
+    setPinnedInspector(info);
+    setInspectorInfo(info);
+    setFocusedComputedStepKey(stepKey);
+    setSelectedStateId(nodeId);
+    setSearchText(nodeId);
+    cy.animate({
+      center: { eles: node },
+      duration: 250,
+    });
+    setStatus(`Focused state ${nodeId}`);
   }
 
   function getComputedPathSteps(path: BoundedPath) {
@@ -2028,12 +2078,63 @@ function App() {
                                   ) : (
                                     <ol>
                                       {steps.map((step) => (
-                                        <li key={`${step.index}-${step.id}`}>
-                                          <strong>{step.transition}</strong>
-                                          <span>
-                                            {step.source} → {step.target}
+                                        <li
+                                          key={`${step.index}-${step.id}`}
+                                          className={
+                                            focusedComputedStepKey === `${index}-${step.index}-${step.id}`
+                                              ? "active"
+                                              : ""
+                                          }
+                                        >
+                                          <button
+                                            type="button"
+                                            className="computed-step-transition"
+                                            onClick={() =>
+                                              focusComputedPathEdge(
+                                                step.id,
+                                                `${index}-${step.index}-${step.id}`
+                                              )
+                                            }
+                                          >
+                                            {step.transition}
+                                          </button>
+                                          <span className="computed-step-route">
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                focusComputedPathNode(
+                                                  step.source,
+                                                  `${index}-${step.index}-${step.id}`
+                                                )
+                                              }
+                                            >
+                                              {step.source}
+                                            </button>
+                                            <span aria-hidden="true">→</span>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                focusComputedPathNode(
+                                                  step.target,
+                                                  `${index}-${step.index}-${step.id}`
+                                                )
+                                              }
+                                            >
+                                              {step.target}
+                                            </button>
                                           </span>
-                                          <code>{step.id}</code>
+                                          <button
+                                            type="button"
+                                            className="computed-step-edge-id"
+                                            onClick={() =>
+                                              focusComputedPathEdge(
+                                                step.id,
+                                                `${index}-${step.index}-${step.id}`
+                                              )
+                                            }
+                                          >
+                                            {step.id}
+                                          </button>
                                         </li>
                                       ))}
                                     </ol>

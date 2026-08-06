@@ -296,6 +296,8 @@ describe("findKShortestBoundedPaths", () => {
           { id: "ab", source: "A", target: "B" },
           { id: "ac", source: "A", target: "C" },
           { id: "ad", source: "A", target: "D" },
+          { id: "bd", source: "B", target: "D" },
+          { id: "cd", source: "C", target: "D" },
         ],
       ),
       { maximumQueuedCandidates: 1 },
@@ -398,6 +400,58 @@ describe("findKShortestBoundedPaths", () => {
     expect(input).toEqual(original);
   });
 
+
+  it("prunes large branches that cannot reach the target", () => {
+    const deadEndCount = 20_000;
+    const nodeIds = [
+      "source",
+      "target",
+      ...Array.from({ length: deadEndCount }, (_, index) => `dead-${index}`),
+    ];
+    const edges: PathSearchEdge[] = [
+      { id: "direct", source: "source", target: "target" },
+      ...Array.from({ length: deadEndCount }, (_, index) => ({
+        id: `dead-edge-${index}`,
+        source: "source",
+        target: `dead-${index}`,
+      })),
+    ];
+
+    const result = findKShortestBoundedPaths(
+      searchInput(nodeIds, edges, {
+        sourceNodeId: "source",
+        targetNodeId: "target",
+        requestedPathCount: 1,
+      }),
+      { maximumQueuedCandidates: 10 },
+    );
+
+    expect(result.paths.map((path) => path.edgeIds)).toEqual([["direct"]]);
+    expect(result.resourceLimitReached).toBe(false);
+    expect(result.expandedCandidateCount).toBe(2);
+  });
+
+  it("uses reverse distance guidance while preserving shortest-first order", () => {
+    const result = findKShortestBoundedPaths(
+      searchInput(
+        ["source", "near", "far-1", "far-2", "target"],
+        [
+          { id: "to-far", source: "source", target: "far-1" },
+          { id: "far-step", source: "far-1", target: "far-2" },
+          { id: "far-target", source: "far-2", target: "target" },
+          { id: "to-near", source: "source", target: "near" },
+          { id: "near-target", source: "near", target: "target" },
+        ],
+        { requestedPathCount: 2 },
+      ),
+    );
+
+    expect(result.paths.map((path) => path.edgeIds)).toEqual([
+      ["to-near", "near-target"],
+      ["to-far", "far-step", "far-target"],
+    ]);
+  });
+
   it("handles a long linear graph", () => {
     const nodeCount = 10_000;
     const nodeIds = Array.from(
@@ -419,5 +473,5 @@ describe("findKShortestBoundedPaths", () => {
 
     expect(result.paths).toHaveLength(1);
     expect(result.paths[0].edgeIds).toHaveLength(nodeCount - 1);
-  }, 15000);
+  });
 });

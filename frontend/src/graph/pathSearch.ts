@@ -64,6 +64,7 @@ export type PathSearchOptions = {
 type NormalizedTopology = {
   nodeIds: string[];
   outgoingEdgesByNodeId: Map<string, PathSearchEdge[]>;
+  incomingNodeIdsByNodeId: Map<string, string[]>;
 };
 
 type ConstraintProgress = {
@@ -75,6 +76,7 @@ type SearchCandidate = {
   parent: SearchCandidate | null;
   incomingEdgeId: string | null;
   depth: number;
+  estimatedTotalCost: number;
   constraintProgress: ConstraintProgress;
   insertionSequence: number;
 };
@@ -163,6 +165,10 @@ function hasHigherPriority(
   left: SearchCandidate,
   right: SearchCandidate,
 ): boolean {
+  if (left.estimatedTotalCost !== right.estimatedTotalCost) {
+    return left.estimatedTotalCost < right.estimatedTotalCost;
+  }
+
   if (left.depth !== right.depth) {
     return left.depth < right.depth;
   }
@@ -207,9 +213,11 @@ function buildTopology(input: PathSearchInput): NormalizedTopology {
   }
 
   const outgoingEdgesByNodeId = new Map<string, PathSearchEdge[]>();
+  const incomingNodeIdsByNodeId = new Map<string, string[]>();
 
   for (const nodeId of nodeIds) {
     outgoingEdgesByNodeId.set(nodeId, []);
+    incomingNodeIdsByNodeId.set(nodeId, []);
   }
 
   const knownEdgeIds = new Set<string>();
@@ -234,12 +242,42 @@ function buildTopology(input: PathSearchInput): NormalizedTopology {
     }
 
     outgoingEdgesByNodeId.get(edge.source)?.push(edge);
+    incomingNodeIdsByNodeId.get(edge.target)?.push(edge.source);
   }
 
   return {
     nodeIds,
     outgoingEdgesByNodeId,
+    incomingNodeIdsByNodeId,
   };
+}
+
+function computeDistancesToTarget(
+  topology: NormalizedTopology,
+  targetNodeId: string,
+): Map<string, number> {
+  const distances = new Map<string, number>([[targetNodeId, 0]]);
+  const queue: string[] = [targetNodeId];
+  let queueIndex = 0;
+
+  while (queueIndex < queue.length) {
+    const nodeId = queue[queueIndex];
+    queueIndex += 1;
+    const nextDistance = (distances.get(nodeId) ?? 0) + 1;
+    const predecessors =
+      topology.incomingNodeIdsByNodeId.get(nodeId) ?? [];
+
+    for (const predecessor of predecessors) {
+      if (distances.has(predecessor)) {
+        continue;
+      }
+
+      distances.set(predecessor, nextDistance);
+      queue.push(predecessor);
+    }
+  }
+
+  return distances;
 }
 
 function validateResourceLimit(
@@ -316,6 +354,10 @@ export function findKShortestBoundedPaths(
   options: PathSearchOptions = {},
 ): PathSearchResult {
   const topology = buildTopology(input);
+  const distancesToTarget = computeDistancesToTarget(
+    topology,
+    input.targetNodeId,
+  );
   const maximumExpandedCandidates = validateResourceLimit(
     options.maximumExpandedCandidates,
     DEFAULT_MAXIMUM_EXPANDED_CANDIDATES,
@@ -339,6 +381,8 @@ export function findKShortestBoundedPaths(
     parent: null,
     incomingEdgeId: null,
     depth: 0,
+    estimatedTotalCost:
+      distancesToTarget.get(input.sourceNodeId) ?? Number.POSITIVE_INFINITY,
     constraintProgress: {
       nextRequiredTransitionIndex: 0,
     },
@@ -393,6 +437,12 @@ export function findKShortestBoundedPaths(
       topology.outgoingEdgesByNodeId.get(candidate.currentNodeId) ?? [];
 
     for (const edge of outgoingEdges) {
+      const remainingDistance = distancesToTarget.get(edge.target);
+
+      if (remainingDistance === undefined) {
+        continue;
+      }
+
       if (queue.size >= maximumQueuedCandidates) {
         resourceLimitReached = true;
         break;
@@ -419,6 +469,7 @@ export function findKShortestBoundedPaths(
         parent: candidate,
         incomingEdgeId: edge.id,
         depth: candidate.depth + 1,
+        estimatedTotalCost: candidate.depth + 1 + remainingDistance,
         constraintProgress: nextConstraintProgress,
         insertionSequence: nextInsertionSequence,
       });
