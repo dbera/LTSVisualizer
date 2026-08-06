@@ -551,3 +551,58 @@ button.active {
   font-size: 11px;
 }
 
+.cyclic-component-list {
+  display: grid;
+  gap: 7px;
+}
+.cyclic-component-list button {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+.cyclic-component-list button.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.cyclic-component-list button span {
+  font-size: 12px;
+  font-weight: 750;
+}
+.cyclic-component-list button small {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: right;
+}
+.selected-component-details {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 11px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+.selected-component-details > div {
+  display: grid;
+  gap: 3px;
+}
+.selected-component-details strong {
+  color: #1e3a8a;
+  font-size: 12px;
+}
+.selected-component-details span {
+  color: #475569;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.selected-component-details button {
+  justify-self: start;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+

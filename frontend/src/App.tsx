@@ -30,6 +30,7 @@ import {
   serializeGraphJson,
 } from "./graph/graphJson";
 import { useGraphAnalysis } from "./graph/useGraphAnalysis";
+import type { StronglyConnectedComponent } from "./graph/graphAnalysis";
 
 interface GraphNode {
   id: string;
@@ -65,6 +66,7 @@ interface InspectorInfo {
 }
 
 const TERMINAL_PAGE_SIZE = 100;
+const SCC_PAGE_SIZE = 100;
 
 function App() {
   const graphContainer = useRef<HTMLDivElement | null>(null);
@@ -98,6 +100,13 @@ function App() {
     useState(false);
   const [terminalStateFilter, setTerminalStateFilter] = useState("");
   const [terminalStatePage, setTerminalStatePage] = useState(0);
+  const [cyclicComponentsExpanded, setCyclicComponentsExpanded] =
+    useState(false);
+  const [minimumCyclicComponentSize, setMinimumCyclicComponentSize] =
+    useState(1);
+  const [cyclicComponentPage, setCyclicComponentPage] = useState(0);
+  const [selectedCyclicComponentId, setSelectedCyclicComponentId] =
+    useState<number | null>(null);
 
   function updatePathMode(mode: PathSelectionMode) {
     pathModeRef.current = mode;
@@ -348,10 +357,16 @@ function App() {
       return;
     }
 
+    setSelectedCyclicComponentId(null);
     const requestedStateId = selectedStateId ?? searchText.trim();
     const startStateId = graph.nodes.some((node) => node.id === requestedStateId)
       ? requestedStateId
       : null;
+
+    if (selectedCyclicComponentId !== null && startStateId) {
+      setSelectedCyclicComponentId(null);
+      showNeighborhood(startStateId, hopCount);
+    }
 
     cyRef.current?.elements().removeClass(
       "path-node path-edge path-start path-end path-next-edge path-next-node path-dimmed"
@@ -711,6 +726,10 @@ function App() {
     setTerminalStatesExpanded(false);
     setTerminalStateFilter("");
     setTerminalStatePage(0);
+    setCyclicComponentsExpanded(false);
+    setMinimumCyclicComponentSize(1);
+    setCyclicComponentPage(0);
+    setSelectedCyclicComponentId(null);
     setStatus(`Loading ${file.name}...`);
     setFileName(file.name);
     setInspectorInfo(null);
@@ -1105,8 +1124,103 @@ function App() {
   );
 
   function focusTerminalState(stateId: string) {
+    setSelectedCyclicComponentId(null);
     showNeighborhood(stateId, hopCount);
     setStatus(`Focused terminal state ${stateId}`);
+  }
+
+  const filteredCyclicComponents =
+    graphAnalysis.result?.cyclicComponents.filter(
+      (component) => component.nodeIds.length >= minimumCyclicComponentSize
+    ) ?? [];
+  const cyclicComponentPageCount = Math.max(
+    1,
+    Math.ceil(filteredCyclicComponents.length / SCC_PAGE_SIZE)
+  );
+  const safeCyclicComponentPage = Math.min(
+    cyclicComponentPage,
+    cyclicComponentPageCount - 1
+  );
+  const visibleCyclicComponents = filteredCyclicComponents.slice(
+    safeCyclicComponentPage * SCC_PAGE_SIZE,
+    (safeCyclicComponentPage + 1) * SCC_PAGE_SIZE
+  );
+  const cyclicComponentResultStart =
+    filteredCyclicComponents.length === 0
+      ? 0
+      : safeCyclicComponentPage * SCC_PAGE_SIZE + 1;
+  const cyclicComponentResultEnd = Math.min(
+    (safeCyclicComponentPage + 1) * SCC_PAGE_SIZE,
+    filteredCyclicComponents.length
+  );
+  const selectedCyclicComponent =
+    graphAnalysis.result?.cyclicComponents.find(
+      (component) => component.id === selectedCyclicComponentId
+    ) ?? null;
+
+  function getCyclicComponentNumber(componentId: number): number {
+    const index = graphAnalysis.result?.cyclicComponents.findIndex(
+      (component) => component.id === componentId
+    ) ?? -1;
+
+    return index >= 0 ? index + 1 : 0;
+  }
+
+  function showCyclicComponent(component: StronglyConnectedComponent) {
+    const graph = graphRef.current;
+    const cy = cyRef.current;
+    if (!graph || !cy) return;
+
+    const componentNodeIds = new Set(component.nodeIds);
+    const componentEdgeIds = new Set(component.internalEdgeIds);
+    const componentEdges = graph.edges.filter(
+      (edge) =>
+        componentEdgeIds.has(edge.id) &&
+        componentNodeIds.has(edge.source) &&
+        componentNodeIds.has(edge.target)
+    );
+    const componentNumber = getCyclicComponentNumber(component.id);
+
+    updateSelectedPath(null);
+    updatePathMode("idle");
+
+    // Replace the canvas contents and then defensively remove anything that
+    // does not belong to the selected SCC. This guarantees an exact component
+    // view even if Cytoscape retained elements from a previous view.
+    replaceVisibleGraph(
+      buildElements(graph, componentNodeIds, componentEdges, showTransitionLabels),
+      overviewLayout === "hierarchical" ? "breadthfirst" : "grid"
+    );
+
+    cy.startBatch();
+    cy.nodes()
+      .filter((node) => !componentNodeIds.has(node.id()))
+      .remove();
+    cy.edges()
+      .filter((edge) => !componentEdgeIds.has(edge.id()))
+      .remove();
+    cy.elements().removeClass(
+      "path-node path-edge path-start path-end path-next-edge path-next-node path-dimmed"
+    );
+    cy.endBatch();
+    cy.resize();
+
+    setSelectedCyclicComponentId(component.id);
+    setShowingAll(false);
+    setSelectedStateId(component.nodeIds[0] ?? null);
+    if (component.nodeIds[0]) setSearchText(component.nodeIds[0]);
+    setStatus(
+      `Showing cyclic component ${componentNumber}: ${component.nodeIds.length} states and ${component.internalEdgeIds.length} internal transitions.`
+    );
+  }
+
+  function clearCyclicComponentView() {
+    setSelectedCyclicComponentId(null);
+    const graph = graphRef.current;
+    if (!graph) return;
+
+    const stateId = selectedStateId ?? graph.nodes[0]?.id;
+    if (stateId) showNeighborhood(stateId, hopCount);
   }
 
   return (
@@ -1462,9 +1576,127 @@ function App() {
                       )}
                     </div>
                   </details>
+                  <details
+                    className="analysis-result-group"
+                    open={cyclicComponentsExpanded}
+                    onToggle={(event) =>
+                      setCyclicComponentsExpanded(event.currentTarget.open)
+                    }
+                  >
+                    <summary>
+                      Cyclic components ({graphAnalysis.result.cyclicComponents.length})
+                    </summary>
+                    <div className="analysis-result-content">
+                      <label
+                        className="analysis-filter-label"
+                        htmlFor="cyclic-component-minimum-size"
+                      >
+                        Minimum component size
+                      </label>
+                      <input
+                        id="cyclic-component-minimum-size"
+                        className="analysis-filter-input"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={minimumCyclicComponentSize}
+                        onChange={(event) => {
+                          const value = Number.parseInt(event.target.value, 10);
+                          setMinimumCyclicComponentSize(
+                            Number.isFinite(value) ? Math.max(1, value) : 1
+                          );
+                          setCyclicComponentPage(0);
+                        }}
+                      />
+                      {filteredCyclicComponents.length === 0 ? (
+                        <p className="analysis-note">
+                          No cyclic components match this minimum size.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="analysis-result-range">
+                            Showing {cyclicComponentResultStart}-
+                            {cyclicComponentResultEnd} of{" "}
+                            {filteredCyclicComponents.length}
+                          </p>
+                          <div className="cyclic-component-list">
+                            {visibleCyclicComponents.map((component) => (
+                              <button
+                                key={component.id}
+                                type="button"
+                                className={
+                                  selectedCyclicComponentId === component.id
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() => showCyclicComponent(component)}
+                              >
+                                <span>Cyclic component {getCyclicComponentNumber(component.id)}</span>
+                                <small>
+                                  {component.nodeIds.length} states ·{" "}
+                                  {component.internalEdgeIds.length} transitions
+                                </small>
+                              </button>
+                            ))}
+                          </div>
+                          {cyclicComponentPageCount > 1 && (
+                            <div className="analysis-pagination">
+                              <button
+                                type="button"
+                                disabled={safeCyclicComponentPage === 0}
+                                onClick={() =>
+                                  setCyclicComponentPage((page) =>
+                                    Math.max(0, page - 1)
+                                  )
+                                }
+                              >
+                                Previous
+                              </button>
+                              <span>
+                                Page {safeCyclicComponentPage + 1} of{" "}
+                                {cyclicComponentPageCount}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={
+                                  safeCyclicComponentPage >=
+                                  cyclicComponentPageCount - 1
+                                }
+                                onClick={() =>
+                                  setCyclicComponentPage((page) =>
+                                    Math.min(cyclicComponentPageCount - 1, page + 1)
+                                  )
+                                }
+                              >
+                                Next
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {selectedCyclicComponent && (
+                        <div className="selected-component-details">
+                          <div>
+                            <strong>
+                              Cyclic component {getCyclicComponentNumber(selectedCyclicComponent.id)}
+                            </strong>
+                            <span>
+                              {selectedCyclicComponent.nodeIds.length} states and{" "}
+                              {selectedCyclicComponent.internalEdgeIds.length} internal
+                              transitions
+                            </span>
+                          </div>
+                          <button type="button" onClick={clearCyclicComponentView}>
+                            Clear component view
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </details>
                   <p className="analysis-note">
                     Terminal-state navigation uses the current neighborhood depth.
-                    Cyclic-component navigation will be added next.
+                    Selecting a cyclic component shows only its states and internal
+                    transitions.
                   </p>
                   <button
                     type="button"
