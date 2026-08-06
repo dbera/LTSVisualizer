@@ -92,6 +92,14 @@ function buildTopology(input: GraphAnalysisInput): GraphTopology {
   };
 }
 
+function findTerminalNodeIdsFromTopology(
+  topology: GraphTopology,
+): string[] {
+  return topology.nodeIds.filter(
+    (nodeId) => topology.outgoing.get(nodeId)?.length === 0,
+  );
+}
+
 /**
  * Returns states with no outgoing transitions.
  *
@@ -105,11 +113,7 @@ function buildTopology(input: GraphAnalysisInput): GraphTopology {
 export function findTerminalNodeIds(
   input: GraphAnalysisInput,
 ): string[] {
-  const topology = buildTopology(input);
-
-  return topology.nodeIds.filter(
-    (nodeId) => topology.outgoing.get(nodeId)?.length === 0,
-  );
+  return findTerminalNodeIdsFromTopology(buildTopology(input));
 }
 
 /**
@@ -169,9 +173,7 @@ function computeFinishingOrder(
   return finishingOrder;
 }
 
-/**
- * Collects one component using an iterative traversal.
- */
+/** Collects one component using an iterative traversal. */
 function collectComponent(
   startNodeId: string,
   adjacency: Map<string, string[]>,
@@ -193,8 +195,7 @@ function collectComponent(
 
     const neighbors = adjacency.get(nodeId) ?? [];
 
-    // Reverse iteration preserves the original adjacency order when using
-    // a last-in-first-out traversal stack.
+    // Reverse iteration preserves adjacency order with a LIFO stack.
     for (
       let neighborIndex = neighbors.length - 1;
       neighborIndex >= 0;
@@ -212,21 +213,9 @@ function collectComponent(
   return componentNodeIds;
 }
 
-/**
- * Finds all strongly connected components in a directed graph.
- *
- * The implementation uses an iterative two-pass depth-first traversal.
- * Explicit stacks avoid recursion-depth failures on long graphs.
- *
- * Components are returned in deterministic graph-node order. A component is
- * cyclic when it contains multiple states or when its single state has a
- * self-loop.
- */
-export function findStronglyConnectedComponents(
-  input: GraphAnalysisInput,
+function findStronglyConnectedComponentsFromTopology(
+  topology: GraphTopology,
 ): StronglyConnectedComponent[] {
-  const topology = buildTopology(input);
-
   if (topology.nodeIds.length === 0) {
     return [];
   }
@@ -312,4 +301,65 @@ export function findStronglyConnectedComponents(
         topology.selfLoopNodeIds.has(componentNodeIds[0]),
     }),
   );
+}
+
+/**
+ * Finds all strongly connected components in a directed graph.
+ *
+ * The implementation uses an iterative two-pass depth-first traversal.
+ * Explicit stacks avoid recursion-depth failures on long graphs.
+ * Components are returned in deterministic graph-node order.
+ */
+export function findStronglyConnectedComponents(
+  input: GraphAnalysisInput,
+): StronglyConnectedComponent[] {
+  return findStronglyConnectedComponentsFromTopology(
+    buildTopology(input),
+  );
+}
+
+/**
+ * Computes the complete topology analysis while constructing the normalized
+ * graph topology only once.
+ *
+ * Cyclic components are ordered by descending state count. Components with
+ * the same size retain their deterministic component order.
+ */
+export function analyzeGraph(
+  input: GraphAnalysisInput,
+): GraphAnalysisResult {
+  const topology = buildTopology(input);
+  const terminalNodeIds =
+    findTerminalNodeIdsFromTopology(topology);
+  const components =
+    findStronglyConnectedComponentsFromTopology(topology);
+
+  const cyclicComponents = components
+    .filter((component) => component.isCyclic)
+    .sort((left, right) => {
+      const sizeDifference =
+        right.nodeIds.length - left.nodeIds.length;
+
+      if (sizeDifference !== 0) {
+        return sizeDifference;
+      }
+
+      return left.id - right.id;
+    });
+
+  const statesInCyclicComponents = cyclicComponents.reduce(
+    (total, component) => total + component.nodeIds.length,
+    0,
+  );
+
+  const largestCyclicComponentSize =
+    cyclicComponents[0]?.nodeIds.length ?? 0;
+
+  return {
+    terminalNodeIds,
+    components,
+    cyclicComponents,
+    statesInCyclicComponents,
+    largestCyclicComponentSize,
+  };
 }

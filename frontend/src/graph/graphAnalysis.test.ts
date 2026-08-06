@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  analyzeGraph,
   findStronglyConnectedComponents,
   findTerminalNodeIds,
   type GraphAnalysisInput,
@@ -664,5 +665,240 @@ describe("findStronglyConnectedComponents", () => {
       nodeCount,
     );
     expect(components[0].isCyclic).toBe(true);
+  });
+});
+
+describe("analyzeGraph", () => {
+  it("returns an empty result for an empty graph", () => {
+    expect(analyzeGraph(graph([], []))).toEqual({
+      terminalNodeIds: [],
+      components: [],
+      cyclicComponents: [],
+      statesInCyclicComponents: 0,
+      largestCyclicComponentSize: 0,
+    });
+  });
+
+  it("combines terminal and component analysis", () => {
+    const result = analyzeGraph(
+      graph(
+        ["start", "a", "b", "end", "isolated"],
+        [
+          {
+            id: "edge-start-a",
+            source: "start",
+            target: "a",
+          },
+          {
+            id: "edge-ab",
+            source: "a",
+            target: "b",
+          },
+          {
+            id: "edge-ba",
+            source: "b",
+            target: "a",
+          },
+          {
+            id: "edge-b-end",
+            source: "b",
+            target: "end",
+          },
+        ],
+      ),
+    );
+
+    expect(result.terminalNodeIds).toEqual([
+      "end",
+      "isolated",
+    ]);
+    expect(result.components).toEqual([
+      {
+        id: 0,
+        nodeIds: ["start"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+      {
+        id: 1,
+        nodeIds: ["a", "b"],
+        internalEdgeIds: ["edge-ab", "edge-ba"],
+        isCyclic: true,
+      },
+      {
+        id: 2,
+        nodeIds: ["end"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+      {
+        id: 3,
+        nodeIds: ["isolated"],
+        internalEdgeIds: [],
+        isCyclic: false,
+      },
+    ]);
+    expect(result.cyclicComponents).toEqual([
+      {
+        id: 1,
+        nodeIds: ["a", "b"],
+        internalEdgeIds: ["edge-ab", "edge-ba"],
+        isCyclic: true,
+      },
+    ]);
+    expect(result.statesInCyclicComponents).toBe(2);
+    expect(result.largestCyclicComponentSize).toBe(2);
+  });
+
+  it("counts a self-loop as a cyclic component", () => {
+    const result = analyzeGraph(
+      graph(
+        ["loop", "terminal"],
+        [
+          {
+            id: "self-loop",
+            source: "loop",
+            target: "loop",
+          },
+        ],
+      ),
+    );
+
+    expect(result.terminalNodeIds).toEqual(["terminal"]);
+    expect(result.cyclicComponents).toHaveLength(1);
+    expect(result.cyclicComponents[0].nodeIds).toEqual([
+      "loop",
+    ]);
+    expect(result.statesInCyclicComponents).toBe(1);
+    expect(result.largestCyclicComponentSize).toBe(1);
+  });
+
+  it("orders cyclic components by descending size", () => {
+    const result = analyzeGraph(
+      graph(
+        ["a", "b", "x", "y", "z"],
+        [
+          {
+            id: "edge-ab",
+            source: "a",
+            target: "b",
+          },
+          {
+            id: "edge-ba",
+            source: "b",
+            target: "a",
+          },
+          {
+            id: "edge-xy",
+            source: "x",
+            target: "y",
+          },
+          {
+            id: "edge-yz",
+            source: "y",
+            target: "z",
+          },
+          {
+            id: "edge-zx",
+            source: "z",
+            target: "x",
+          },
+        ],
+      ),
+    );
+
+    expect(
+      result.cyclicComponents.map(
+        (component) => component.nodeIds,
+      ),
+    ).toEqual([
+      ["x", "y", "z"],
+      ["a", "b"],
+    ]);
+    expect(result.statesInCyclicComponents).toBe(5);
+    expect(result.largestCyclicComponentSize).toBe(3);
+  });
+
+  it("preserves component order when cyclic sizes are equal", () => {
+    const result = analyzeGraph(
+      graph(
+        ["a", "b", "c", "d"],
+        [
+          {
+            id: "edge-ab",
+            source: "a",
+            target: "b",
+          },
+          {
+            id: "edge-ba",
+            source: "b",
+            target: "a",
+          },
+          {
+            id: "edge-cd",
+            source: "c",
+            target: "d",
+          },
+          {
+            id: "edge-dc",
+            source: "d",
+            target: "c",
+          },
+        ],
+      ),
+    );
+
+    expect(
+      result.cyclicComponents.map(
+        (component) => component.nodeIds,
+      ),
+    ).toEqual([
+      ["a", "b"],
+      ["c", "d"],
+    ]);
+  });
+
+  it("does not modify the input", () => {
+    const input = graph(
+      ["0", "1"],
+      [
+        {
+          id: "edge-01",
+          source: "0",
+          target: "1",
+        },
+      ],
+    );
+    const originalInput = structuredClone(input);
+
+    analyzeGraph(input);
+
+    expect(input).toEqual(originalInput);
+  });
+
+  it("returns zero cyclic statistics for an acyclic graph", () => {
+    const result = analyzeGraph(
+      graph(
+        ["0", "1", "2"],
+        [
+          {
+            id: "edge-01",
+            source: "0",
+            target: "1",
+          },
+          {
+            id: "edge-12",
+            source: "1",
+            target: "2",
+          },
+        ],
+      ),
+    );
+
+    expect(result.terminalNodeIds).toEqual(["2"]);
+    expect(result.components).toHaveLength(3);
+    expect(result.cyclicComponents).toEqual([]);
+    expect(result.statesInCyclicComponents).toBe(0);
+    expect(result.largestCyclicComponentSize).toBe(0);
   });
 });
