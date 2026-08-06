@@ -20,6 +20,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Added large synthetic tests for long acyclic graphs and large strongly connected components.
 - Added worker-controller tests for success, failure, cancellation, reruns, stale responses, malformed responses, reset, and disposal.
 - Added `sample-data/synthetic.json` with known terminal-state and SCC results for manual verification.
+- Added a **Paths** tab for a user-defined number of shortest paths between source and target states.
+- Added configurable maximum visits per state; `1` produces loopless paths and higher values permit bounded revisits.
+- Added equal-source-and-target support, including zero-transition paths and bounded returning cycles.
+- Added edge-ID-sequence uniqueness so parallel transitions produce distinct alternatives.
+- Added deterministic shortest-first ordering by transition count.
+- Added reverse-distance-guided search to prioritize reachable alternatives and prune states that cannot reach the target.
+- Added internal candidate safeguards with partial-result reporting when additional paths may exist.
+- Added an inline path-search Web Worker with cancellation, stale-response protection, reruns, errors, reset, and disposal.
+- Added path-search and worker-controller tests covering ordering, revisits, self-loops, parallel edges, equal endpoints, safeguards, cancellation, long paths, reverse-distance pruning, and lifecycle behavior.
+- Added computed-path navigation using existing visualization and JSON and PlantUML exports.
+- Added expandable transition details with names, source and target states, and exact edge IDs.
+- Added clickable result details that center and select graph edges or states while keeping the Paths tab open.
+- Added graph-view snapshots and **Return to graph view** restoration for visible elements, positions, zoom, pan, focus, neighborhood depth, and layout.
+- Added separate curved rendering for parallel transitions.
 
 ### Changed
 
@@ -28,6 +42,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Kept terminal-state terminology separate from deadlock classification because successful completion and unintended deadlock cannot be distinguished from topology alone.
 - Updated path selection to leave a component-only graph view before path construction begins.
 - Preserved analysis results while switching between Inspector and Analysis tabs or navigating individual results.
+- Preserved path-search results while switching among Inspector, Analysis, and Paths.
+- Kept computed-path inspection non-disruptive by pinning Inspector data without switching tabs automatically.
+- Reused the selected-path representation so computed paths retain ordered edge IDs, loops, repeated traversals, parallel-edge identity, semantic data, and export behavior.
+- Kept computed-path viewport fitting separate from layout so selecting a result does not rearrange states.
+- Reserved the path-search model for future ordered transition constraints and partial transition-data matching.
 
 ### Fixed
 
@@ -35,6 +54,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Fixed cyclic components being displayed with confusing internal SCC IDs instead of sequential user-facing numbers.
 - Fixed stale worker responses being able to affect a newer analysis request.
 - Fixed worker cleanup during cancellation, reset, rerun, and component unmounting.
+- Fixed dense searches wasting candidate capacity on branches that cannot reach the target by adding reverse-distance pruning.
+- Fixed long-path candidate construction repeatedly copying complete path data by using parent-linked candidates and reconstructing edge IDs only for completed paths.
+- Fixed computed paths being difficult to locate by fitting the viewport without changing node positions.
+- Fixed leaving a computed-path view requiring manual graph reconstruction by restoring the saved graph view explicitly.
+- Fixed edge-unique paths with identical state sequences being visually indistinguishable by separating parallel curves and exposing exact transition details.
 
 ## [0.4.0](https://github.com/dbera/LTSVisualizer/compare/v0.3.0...v0.4.0) - 2026-08-06
 

@@ -101,6 +101,27 @@ A terminal state is not automatically an error. Whether a terminal state represe
 
 Analysis results are held in browser memory for the currently loaded graph. They are reset when another graph is opened and are not added to graph or selected-path exports.
 
+### Bounded alternative path search
+
+- Open the **Paths** tab to compute up to a user-defined number of shortest paths between two states.
+- Set **Visits per state** to `1` for loopless paths or to a higher value to allow bounded revisits.
+- Support equal source and target states. The zero-transition path is returned first, and returning cycles may follow when the visit bound permits them.
+- Treat paths as unique by ordered edge-ID sequence, so parallel transitions remain distinct even when they connect the same states.
+- Order results by increasing transition count, with deterministic ordering for equal-length alternatives.
+- Use reverse shortest-distance guidance from the target to prioritize reachable alternatives and prune states that cannot reach the target.
+- Run searches in an inline Web Worker with cancellation, stale-result protection, errors, reruns, and reset when another graph is loaded.
+- Stop safely at internal candidate safeguards and report partial results without claiming that no additional paths exist.
+- Select a result to reuse existing path visualization and JSON and PlantUML exports.
+- Separate parallel transitions visually and expose transition names, source and target states, and exact edge IDs.
+- Select transition or state details to center and select the corresponding graph element without leaving the **Paths** tab.
+- Pin clicked transition or state data for later viewing in Inspector without switching tabs automatically.
+- Preserve search results while switching among Inspector, Analysis, and Paths.
+- Fit the viewport around a computed path without changing node positions.
+- Use **Return to graph view** to restore visible elements, positions, zoom, pan, focus, neighborhood depth, and layout while retaining results.
+- Use the same functionality in hosted and offline `file:///` builds.
+
+Path-search results are kept in browser memory for the currently loaded graph and are reset when another graph is opened.
+
 ### Manual path selection
 
 - Start a path from the currently focused state.
@@ -384,6 +405,21 @@ For very large graphs, neighborhood exploration is recommended instead of displa
 
 For large graphs, worker execution prevents the analysis algorithm from blocking the main browser interface. Preparing and transferring graph topology still consumes browser memory, so analysis remains an explicit user action.
 
+### Find alternative paths
+
+1. Open the **Paths** tab.
+2. Enter source and target state IDs.
+3. Choose the requested number of paths.
+4. Set **Visits per state** to `1` for loopless paths or higher for bounded revisits.
+5. Select **Find paths**. During a running search, the action changes to **Cancel**.
+6. Select a result to display it without relaying out its states.
+7. Expand **Show transition details** to compare transition names, state pairs, and edge IDs.
+8. Select a transition name or edge ID to center and select its edge, or select a state ID to center and select its state.
+9. Use **Export .puml** or **Export .json** to export the displayed computed path.
+10. Select **Return to graph view** to restore the prior graph context without clearing results.
+
+Paths are ordered by transition count and are unique by ordered edge IDs. If source and target are equal, the zero-transition path is valid.
+
 ### Select a path
 
 1. Search for or focus the desired starting state.
@@ -487,6 +523,8 @@ React and TypeScript application
         |-- Structured semantic-data inspection
         |-- On-demand terminal-state and SCC analysis
         |   `-- Inline Web Worker with cancellation
+        |-- Bounded alternative path search
+        |   `-- Reverse-distance-guided inline Web Worker with cancellation
         |-- Manual path selection
         |-- Complete-graph JSON export
         |-- Selected-path JSON export
@@ -594,7 +632,7 @@ npm run build
 npm run build:offline
 ```
 
-The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, path selection, loops, repeated states, parallel edges, selected-path export, semantic data, PlantUML path export, terminal-state detection, iterative SCC computation, large synthetic graph topologies, and worker-controller lifecycle behavior.
+The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, manual and computed path selection, loops, repeated states, bounded revisits, source-equals-target paths, self-loops, parallel edges, deterministic shortest-first ordering, reverse-distance pruning, resource safeguards, selected-path export, semantic data, PlantUML path export, terminal-state detection, iterative SCC computation, large synthetic graph topologies, and worker-controller lifecycle behavior.
 
 ## Build targets
 
@@ -686,6 +724,8 @@ The tag triggers the offline HTML release workflow and publishes `LTSVisualizer.
 - Global force-directed layouts are intentionally avoided because they can be computationally expensive in the browser.
 - Terminal states are reported topologically and are not classified as successful completions or definite deadlocks.
 - Graph analysis uses a worker and is user-triggered, but very large graphs still require additional browser memory for topology transfer and analysis results.
+- Bounded path search is user-triggered and uses a worker, but highly connected graphs can still reach internal candidate safeguards before every requested alternative is found. Partial results are reported and additional valid paths may exist.
+- Cancelling path search terminates its worker immediately; partial paths found before cancellation are not retained.
 - The offline release depends on browser support for local `file:///` applications and file selection.
 - GitHub Pages availability depends on successful processing by GitHub's deployment service.
 
@@ -693,17 +733,14 @@ The tag triggers the offline HTML release workflow and publishes `LTSVisualizer.
 
 Planned priority:
 
-1. Experiment with constrained graph search.
+1. Extend bounded alternative path search with transition constraints.
 
-The constrained graph-search experiment may support:
+The future constrained-search extension may support:
 
-- Start and optional target states
 - Required transitions in order
+- Required transitions matched by transition name and specific or partial structured input and output data
 - Forbidden transitions
-- Maximum path length
-- Shortest matching paths
-- Loops and parallel transitions
-- Reuse of the existing path visualization and export functionality
+- Additional constraint combinations while preserving bounded revisits, parallel-edge identity, shortest-first results, and existing visualization and export functionality
 
 Additional potential improvements include:
 
