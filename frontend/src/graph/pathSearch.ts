@@ -72,8 +72,9 @@ type ConstraintProgress = {
 
 type SearchCandidate = {
   currentNodeId: string;
-  edgeIds: string[];
-  visitCounts: Map<string, number>;
+  parent: SearchCandidate | null;
+  incomingEdgeId: string | null;
+  depth: number;
   constraintProgress: ConstraintProgress;
   insertionSequence: number;
 };
@@ -162,8 +163,8 @@ function hasHigherPriority(
   left: SearchCandidate,
   right: SearchCandidate,
 ): boolean {
-  if (left.edgeIds.length !== right.edgeIds.length) {
-    return left.edgeIds.length < right.edgeIds.length;
+  if (left.depth !== right.depth) {
+    return left.depth < right.depth;
   }
 
   return left.insertionSequence < right.insertionSequence;
@@ -267,6 +268,38 @@ function advanceConstraintProgress(
   return progress;
 }
 
+function countNodeVisits(
+  candidate: SearchCandidate,
+  nodeId: string,
+): number {
+  let count = 0;
+  let current: SearchCandidate | null = candidate;
+
+  while (current !== null) {
+    if (current.currentNodeId === nodeId) {
+      count += 1;
+    }
+
+    current = current.parent;
+  }
+
+  return count;
+}
+
+function reconstructEdgeIds(candidate: SearchCandidate): string[] {
+  const edgeIds = new Array<string>(candidate.depth);
+  let current: SearchCandidate | null = candidate;
+  let index = candidate.depth - 1;
+
+  while (current !== null && current.incomingEdgeId !== null) {
+    edgeIds[index] = current.incomingEdgeId;
+    index -= 1;
+    current = current.parent;
+  }
+
+  return edgeIds;
+}
+
 function createPathKey(edgeIds: string[]): string {
   return JSON.stringify(edgeIds);
 }
@@ -303,8 +336,9 @@ export function findKShortestBoundedPaths(
 
   queue.push({
     currentNodeId: input.sourceNodeId,
-    edgeIds: [],
-    visitCounts: new Map([[input.sourceNodeId, 1]]),
+    parent: null,
+    incomingEdgeId: null,
+    depth: 0,
     constraintProgress: {
       nextRequiredTransitionIndex: 0,
     },
@@ -333,17 +367,18 @@ export function findKShortestBoundedPaths(
 
     expandedCandidateCount += 1;
     const isZeroTransitionSourceTargetPath =
-      candidate.edgeIds.length === 0 &&
+      candidate.depth === 0 &&
       input.sourceNodeId === input.targetNodeId;
 
     if (candidate.currentNodeId === input.targetNodeId) {
-      const pathKey = createPathKey(candidate.edgeIds);
+      const edgeIds = reconstructEdgeIds(candidate);
+      const pathKey = createPathKey(edgeIds);
 
       if (!emittedPathKeys.has(pathKey)) {
         emittedPathKeys.add(pathKey);
         paths.push({
           startNodeId: input.sourceNodeId,
-          edgeIds: candidate.edgeIds,
+          edgeIds,
         });
       }
 
@@ -363,7 +398,7 @@ export function findKShortestBoundedPaths(
         break;
       }
 
-      const existingVisitCount = candidate.visitCounts.get(edge.target) ?? 0;
+      const existingVisitCount = countNodeVisits(candidate, edge.target);
 
       if (existingVisitCount >= input.maximumVisitsPerState) {
         continue;
@@ -379,13 +414,11 @@ export function findKShortestBoundedPaths(
         continue;
       }
 
-      const nextVisitCounts = new Map(candidate.visitCounts);
-      nextVisitCounts.set(edge.target, existingVisitCount + 1);
-
       queue.push({
         currentNodeId: edge.target,
-        edgeIds: [...candidate.edgeIds, edge.id],
-        visitCounts: nextVisitCounts,
+        parent: candidate,
+        incomingEdgeId: edge.id,
+        depth: candidate.depth + 1,
         constraintProgress: nextConstraintProgress,
         insertionSequence: nextInsertionSequence,
       });
