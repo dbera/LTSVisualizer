@@ -8,12 +8,15 @@ import {
 } from "./declareConstraints";
 import { validateExecutableDeclareConstraint } from "./declareMonitorFactory";
 import TransitionPicker from "./TransitionPicker";
+import TransitionDataFieldPicker from "./TransitionDataFieldPicker";
 import type { TransitionOption } from "./transitionCatalog";
+import type { TransitionDataCatalogue } from "./transitionDataCatalogue";
 
 type Props = {
   constraints: DeclareConstraint[];
   disabled: boolean;
   transitionOptions: readonly TransitionOption[];
+  transitionDataCatalogue: TransitionDataCatalogue;
   onChange: (constraints: DeclareConstraint[]) => void;
 };
 
@@ -35,6 +38,7 @@ export default function DeclareConstraintBuilder({
   constraints,
   disabled,
   transitionOptions,
+  transitionDataCatalogue,
   onChange,
 }: Props) {
   function update(
@@ -178,27 +182,46 @@ export default function DeclareConstraintBuilder({
                     changeTransition(constraint.id, "activation", value)
                   }
                 />
+                <TransitionDataFieldPicker
+                  catalogue={transitionDataCatalogue}
+                  transitionName={transitionValue(constraint, "activation")}
+                  disabled={disabled}
+                />
                 {definition.requiredRoles.includes("target") && (
-                  <TransitionPicker
-                    label="Target transition"
-                    value={transitionValue(constraint, "target")}
-                    options={transitionOptions}
-                    disabled={disabled}
-                    onChange={(value) =>
-                      changeTransition(constraint.id, "target", value)
-                    }
-                  />
+                  <>
+                    <TransitionPicker
+                      label="Target transition"
+                      value={transitionValue(constraint, "target")}
+                      options={transitionOptions}
+                      disabled={disabled}
+                      onChange={(value) =>
+                        changeTransition(constraint.id, "target", value)
+                      }
+                    />
+                    <TransitionDataFieldPicker
+                      catalogue={transitionDataCatalogue}
+                      transitionName={transitionValue(constraint, "target")}
+                      disabled={disabled}
+                    />
+                  </>
                 )}
                 {definition.requiredRoles.includes("between") && (
-                  <TransitionPicker
-                    label="Between transition"
-                    value={transitionValue(constraint, "between")}
-                    options={transitionOptions}
-                    disabled={disabled}
-                    onChange={(value) =>
-                      changeTransition(constraint.id, "between", value)
-                    }
-                  />
+                  <>
+                    <TransitionPicker
+                      label="Between transition"
+                      value={transitionValue(constraint, "between")}
+                      options={transitionOptions}
+                      disabled={disabled}
+                      onChange={(value) =>
+                        changeTransition(constraint.id, "between", value)
+                      }
+                    />
+                    <TransitionDataFieldPicker
+                      catalogue={transitionDataCatalogue}
+                      transitionName={transitionValue(constraint, "between")}
+                      disabled={disabled}
+                    />
+                  </>
                 )}
                 {definition.supportsCount && (
                   <label>

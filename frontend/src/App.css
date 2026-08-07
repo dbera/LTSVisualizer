@@ -791,3 +791,90 @@ button.active {
   font-weight: 500;
   line-height: 1.4;
 }
+
+
+.transition-data-browser {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  background: #ffffff;
+}
+.transition-data-browser > label {
+  display: grid;
+  gap: 5px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+.transition-data-picker {
+  position: relative;
+}
+.transition-data-picker input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+}
+.transition-data-picker input:focus {
+  border-color: #2563eb;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.13);
+}
+.transition-data-picker-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  display: grid;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+}
+.transition-data-picker-list button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 0;
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 0;
+  text-align: left;
+}
+.transition-data-picker-list button:last-child {
+  border-bottom: 0;
+}
+.transition-data-picker-list button:hover,
+.transition-data-picker-list button.active {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.transition-data-picker-list button span {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  font-weight: 700;
+}
+.transition-data-picker-list button small {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 600;
+}
+.transition-data-picker-note,
+.transition-data-picker-selection {
+  margin: 0;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.transition-data-picker-selection code {
+  color: #334155;
+  overflow-wrap: anywhere;
+}

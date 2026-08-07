@@ -37,6 +37,7 @@ import { usePathSearch } from "./graph/usePathSearch";
 import type { BoundedPath } from "./graph/pathSearch";
 import type { StronglyConnectedComponent } from "./graph/graphAnalysis";
 import { buildTransitionCatalogue } from "./graph/transitionCatalog";
+import { buildTransitionDataCatalogue } from "./graph/transitionDataCatalogue";
 
 interface GraphNode {
   id: string;
@@ -1288,6 +1289,13 @@ function App() {
   const transitionOptions = buildTransitionCatalogue(
     graphRef.current?.edges.map((edge) => edge.transition) ?? [],
   );
+  const transitionDataCatalogue = buildTransitionDataCatalogue(
+    graphRef.current?.edges.map((edge) => ({
+      transition: edge.transition,
+      inputs: edge.inputs,
+      outputs: edge.outputs,
+    })) ?? [],
+  );
   const visibleInspector = pinnedInspector ?? inspectorInfo;
   const selectedPathEdges = selectedPath?.edgeIds ?? [];
   const selectedPathEndNodeId = (() => {
@@ -2068,6 +2076,7 @@ function App() {
                     <DeclareConstraintBuilder
                       constraints={declareConstraints}
                       transitionOptions={transitionOptions}
+                      transitionDataCatalogue={transitionDataCatalogue}
                       disabled={pathSearch.status === "running"}
                       onChange={changeDeclareConstraints}
                     />
