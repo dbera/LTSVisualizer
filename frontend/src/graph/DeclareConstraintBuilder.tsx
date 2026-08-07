@@ -8,7 +8,7 @@ import {
 } from "./declareConstraints";
 import { validateExecutableDeclareConstraint } from "./declareMonitorFactory";
 import TransitionPicker from "./TransitionPicker";
-import TransitionDataFieldPicker from "./TransitionDataFieldPicker";
+import TransitionConditionEditor from "./TransitionConditionEditor";
 import type { TransitionOption } from "./transitionCatalog";
 import type { TransitionDataCatalogue } from "./transitionDataCatalogue";
 
@@ -32,6 +32,13 @@ function transitionValue(
   role: DeclarePredicateRole,
 ): string {
   return constraint[role]?.predicates[0]?.transition?.value ?? "";
+}
+
+function transitionCondition(
+  constraint: DeclareConstraint,
+  role: DeclarePredicateRole,
+) {
+  return constraint[role]?.predicates[0]?.condition;
 }
 
 export default function DeclareConstraintBuilder({
@@ -93,7 +100,50 @@ export default function DeclareConstraintBuilder({
     role: DeclarePredicateRole,
     value: string,
   ) {
-    update(id, (constraint) => ({ ...constraint, [role]: group(value) }));
+    update(id, (constraint) => {
+      const currentGroup = constraint[role] ?? group();
+      const currentPredicate = currentGroup.predicates[0] ?? {};
+
+      return {
+        ...constraint,
+        [role]: {
+          ...currentGroup,
+          predicates: [
+            {
+              ...currentPredicate,
+              transition: { operator: "equals", value },
+            },
+            ...currentGroup.predicates.slice(1),
+          ],
+        },
+      };
+    });
+  }
+
+  function changeCondition(
+    id: string,
+    role: DeclarePredicateRole,
+    condition: import("./transitionConditions").TransitionCondition | undefined,
+  ) {
+    update(id, (constraint) => {
+      const currentGroup = constraint[role] ?? group();
+      const currentPredicate = currentGroup.predicates[0] ?? {};
+      const nextPredicate = { ...currentPredicate };
+
+      if (condition === undefined) {
+        delete nextPredicate.condition;
+      } else {
+        nextPredicate.condition = condition;
+      }
+
+      return {
+        ...constraint,
+        [role]: {
+          ...currentGroup,
+          predicates: [nextPredicate, ...currentGroup.predicates.slice(1)],
+        },
+      };
+    });
   }
 
   return (
@@ -182,10 +232,14 @@ export default function DeclareConstraintBuilder({
                     changeTransition(constraint.id, "activation", value)
                   }
                 />
-                <TransitionDataFieldPicker
+                <TransitionConditionEditor
                   catalogue={transitionDataCatalogue}
                   transitionName={transitionValue(constraint, "activation")}
+                  condition={transitionCondition(constraint, "activation")}
                   disabled={disabled}
+                  onChange={(condition) =>
+                    changeCondition(constraint.id, "activation", condition)
+                  }
                 />
                 {definition.requiredRoles.includes("target") && (
                   <>
@@ -198,11 +252,15 @@ export default function DeclareConstraintBuilder({
                         changeTransition(constraint.id, "target", value)
                       }
                     />
-                    <TransitionDataFieldPicker
-                      catalogue={transitionDataCatalogue}
-                      transitionName={transitionValue(constraint, "target")}
-                      disabled={disabled}
-                    />
+                    <TransitionConditionEditor
+                  catalogue={transitionDataCatalogue}
+                  transitionName={transitionValue(constraint, "target")}
+                  condition={transitionCondition(constraint, "target")}
+                  disabled={disabled}
+                  onChange={(condition) =>
+                    changeCondition(constraint.id, "target", condition)
+                  }
+                />
                   </>
                 )}
                 {definition.requiredRoles.includes("between") && (
@@ -216,11 +274,15 @@ export default function DeclareConstraintBuilder({
                         changeTransition(constraint.id, "between", value)
                       }
                     />
-                    <TransitionDataFieldPicker
-                      catalogue={transitionDataCatalogue}
-                      transitionName={transitionValue(constraint, "between")}
-                      disabled={disabled}
-                    />
+                    <TransitionConditionEditor
+                  catalogue={transitionDataCatalogue}
+                  transitionName={transitionValue(constraint, "between")}
+                  condition={transitionCondition(constraint, "between")}
+                  disabled={disabled}
+                  onChange={(condition) =>
+                    changeCondition(constraint.id, "between", condition)
+                  }
+                />
                   </>
                 )}
                 {definition.supportsCount && (

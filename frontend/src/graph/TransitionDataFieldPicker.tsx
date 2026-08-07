@@ -16,6 +16,9 @@ type Props = {
   catalogue: TransitionDataCatalogue;
   transitionName: string;
   disabled?: boolean;
+  label?: string;
+  selectedField?: TransitionDataField | null;
+  onSelect?: (field: TransitionDataField) => void;
 };
 
 const MAX_VISIBLE_OPTIONS = 100;
@@ -34,12 +37,18 @@ export default function TransitionDataFieldPicker({
   catalogue,
   transitionName,
   disabled = false,
+  label = "Available data fields",
+  selectedField: controlledSelectedField,
+  onSelect,
 }: Props) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [selectedField, setSelectedField] =
+  const [internalSelectedField, setInternalSelectedField] =
     useState<TransitionDataField | null>(null);
+  const selectedField = controlledSelectedField === undefined
+    ? internalSelectedField
+    : controlledSelectedField;
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const availableFields = useMemo(
@@ -62,7 +71,7 @@ export default function TransitionDataFieldPicker({
     setQuery("");
     setOpen(false);
     setActiveIndex(0);
-    setSelectedField(null);
+    setInternalSelectedField(null);
   }, [transitionName, catalogue]);
 
   useEffect(() => {
@@ -80,7 +89,8 @@ export default function TransitionDataFieldPicker({
   }, []);
 
   function select(field: TransitionDataField) {
-    setSelectedField(field);
+    setInternalSelectedField(field);
+    onSelect?.(field);
     setQuery(field.displayPath);
     setOpen(false);
   }
@@ -120,7 +130,7 @@ export default function TransitionDataFieldPicker({
   return (
     <div className="transition-data-browser">
       <label>
-        Available data fields
+        {label}
         <div className="transition-data-picker" ref={containerRef}>
           <input
             type="text"
@@ -136,7 +146,7 @@ export default function TransitionDataFieldPicker({
             onFocus={() => setOpen(true)}
             onChange={(event) => {
               setQuery(event.target.value);
-              setSelectedField(null);
+              setInternalSelectedField(null);
               setActiveIndex(0);
               setOpen(true);
             }}
