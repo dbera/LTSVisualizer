@@ -7,10 +7,13 @@ import {
   type DeclareTemplateId,
 } from "./declareConstraints";
 import { validateExecutableDeclareConstraint } from "./declareMonitorFactory";
+import TransitionPicker from "./TransitionPicker";
+import type { TransitionOption } from "./transitionCatalog";
 
 type Props = {
   constraints: DeclareConstraint[];
   disabled: boolean;
+  transitionOptions: readonly TransitionOption[];
   onChange: (constraints: DeclareConstraint[]) => void;
 };
 
@@ -31,6 +34,7 @@ function transitionValue(
 export default function DeclareConstraintBuilder({
   constraints,
   disabled,
+  transitionOptions,
   onChange,
 }: Props) {
   function update(
@@ -165,54 +169,36 @@ export default function DeclareConstraintBuilder({
                     ))}
                   </select>
                 </label>
-                <label>
-                  Activation transition
-                  <input
-                    value={transitionValue(constraint, "activation")}
-                    onChange={(event) =>
-                      changeTransition(
-                        constraint.id,
-                        "activation",
-                        event.target.value,
-                      )
-                    }
-                    placeholder="Transition name"
-                    disabled={disabled}
-                  />
-                </label>
+                <TransitionPicker
+                  label="Activation transition"
+                  value={transitionValue(constraint, "activation")}
+                  options={transitionOptions}
+                  disabled={disabled}
+                  onChange={(value) =>
+                    changeTransition(constraint.id, "activation", value)
+                  }
+                />
                 {definition.requiredRoles.includes("target") && (
-                  <label>
-                    Target transition
-                    <input
-                      value={transitionValue(constraint, "target")}
-                      onChange={(event) =>
-                        changeTransition(
-                          constraint.id,
-                          "target",
-                          event.target.value,
-                        )
-                      }
-                      placeholder="Transition name"
-                      disabled={disabled}
-                    />
-                  </label>
+                  <TransitionPicker
+                    label="Target transition"
+                    value={transitionValue(constraint, "target")}
+                    options={transitionOptions}
+                    disabled={disabled}
+                    onChange={(value) =>
+                      changeTransition(constraint.id, "target", value)
+                    }
+                  />
                 )}
                 {definition.requiredRoles.includes("between") && (
-                  <label>
-                    Between transition
-                    <input
-                      value={transitionValue(constraint, "between")}
-                      onChange={(event) =>
-                        changeTransition(
-                          constraint.id,
-                          "between",
-                          event.target.value,
-                        )
-                      }
-                      placeholder="Transition name"
-                      disabled={disabled}
-                    />
-                  </label>
+                  <TransitionPicker
+                    label="Between transition"
+                    value={transitionValue(constraint, "between")}
+                    options={transitionOptions}
+                    disabled={disabled}
+                    onChange={(value) =>
+                      changeTransition(constraint.id, "between", value)
+                    }
+                  />
                 )}
                 {definition.supportsCount && (
                   <label>

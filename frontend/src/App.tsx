@@ -36,6 +36,7 @@ import { useGraphAnalysis } from "./graph/useGraphAnalysis";
 import { usePathSearch } from "./graph/usePathSearch";
 import type { BoundedPath } from "./graph/pathSearch";
 import type { StronglyConnectedComponent } from "./graph/graphAnalysis";
+import { buildTransitionCatalogue } from "./graph/transitionCatalog";
 
 interface GraphNode {
   id: string;
@@ -143,6 +144,20 @@ function App() {
   function updateSelectedPath(path: SelectedPath | null) {
     selectedPathRef.current = path;
     setSelectedPath(path);
+  }
+
+  function invalidatePathSearchResults() {
+    if (pathSearch.status !== "not-run") {
+      pathSearch.reset();
+      setShownSearchPathIndex(null);
+      setFocusedComputedStepKey(null);
+      setComputedPathViewActive(false);
+    }
+  }
+
+  function changeDeclareConstraints(constraints: DeclareConstraint[]) {
+    invalidatePathSearchResults();
+    setDeclareConstraints(constraints);
   }
 
   function makeNodeInspector(node: cytoscape.NodeSingular): InspectorInfo {
@@ -1270,6 +1285,9 @@ function App() {
     return () => observer.disconnect();
   }, []);
 
+  const transitionOptions = buildTransitionCatalogue(
+    graphRef.current?.edges.map((edge) => edge.transition) ?? [],
+  );
   const visibleInspector = pinnedInspector ?? inspectorInfo;
   const selectedPathEdges = selectedPath?.edgeIds ?? [];
   const selectedPathEndNodeId = (() => {
@@ -2034,23 +2052,24 @@ function App() {
                 <>
                   <form className="path-search-form" onSubmit={runPathSearch}>
                     <label htmlFor="path-search-source">Source state</label>
-                    <input id="path-search-source" value={pathSearchSource} onChange={(event) => setPathSearchSource(event.target.value)} disabled={pathSearch.status === "running"} />
+                    <input id="path-search-source" value={pathSearchSource} onChange={(event) => { invalidatePathSearchResults(); setPathSearchSource(event.target.value); }} disabled={pathSearch.status === "running"} />
                     <label htmlFor="path-search-target">Target state</label>
-                    <input id="path-search-target" value={pathSearchTarget} onChange={(event) => setPathSearchTarget(event.target.value)} disabled={pathSearch.status === "running"} />
+                    <input id="path-search-target" value={pathSearchTarget} onChange={(event) => { invalidatePathSearchResults(); setPathSearchTarget(event.target.value); }} disabled={pathSearch.status === "running"} />
                     <div className="path-search-number-row">
                       <div>
                         <label htmlFor="path-search-count">Number of paths</label>
-                        <input id="path-search-count" type="number" min="1" max="100" step="1" value={requestedPathCount} onChange={(event) => setRequestedPathCount(Math.max(1, Number.parseInt(event.target.value, 10) || 1))} disabled={pathSearch.status === "running"} />
+                        <input id="path-search-count" type="number" min="1" max="100" step="1" value={requestedPathCount} onChange={(event) => { invalidatePathSearchResults(); setRequestedPathCount(Math.max(1, Number.parseInt(event.target.value, 10) || 1)); }} disabled={pathSearch.status === "running"} />
                       </div>
                       <div>
                         <label htmlFor="path-search-visits">Visits per state</label>
-                        <input id="path-search-visits" type="number" min="1" max="10" step="1" value={maximumVisitsPerState} onChange={(event) => setMaximumVisitsPerState(Math.max(1, Number.parseInt(event.target.value, 10) || 1))} disabled={pathSearch.status === "running"} />
+                        <input id="path-search-visits" type="number" min="1" max="10" step="1" value={maximumVisitsPerState} onChange={(event) => { invalidatePathSearchResults(); setMaximumVisitsPerState(Math.max(1, Number.parseInt(event.target.value, 10) || 1)); }} disabled={pathSearch.status === "running"} />
                       </div>
                     </div>
                     <DeclareConstraintBuilder
                       constraints={declareConstraints}
+                      transitionOptions={transitionOptions}
                       disabled={pathSearch.status === "running"}
-                      onChange={setDeclareConstraints}
+                      onChange={changeDeclareConstraints}
                     />
                     <p className="analysis-note">A visit limit of 1 produces loopless paths. Higher values allow bounded revisits. Paths are unique by ordered edge IDs.</p>
                     {pathSearch.status === "running" ? (

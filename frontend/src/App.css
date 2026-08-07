@@ -730,3 +730,64 @@ button.active {
 .declare-constraint-toolbar input { width: auto; }
 .declare-description { margin: 0; line-height: 1.4; }
 .declare-errors { margin: 0; padding-left: 18px; color: #b91c1c; font-size: 10px; line-height: 1.4; }
+
+.transition-picker-label {
+  position: relative;
+  z-index: 1;
+}
+.transition-picker-label:focus-within {
+  z-index: 5;
+}
+.transition-picker {
+  position: relative;
+  display: block;
+}
+.transition-picker-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  display: grid;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+}
+.transition-picker-list button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 0;
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 0;
+  text-align: left;
+}
+.transition-picker-list button:last-child {
+  border-bottom: 0;
+}
+.transition-picker-list button:hover,
+.transition-picker-list button.active {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.transition-picker-list button span {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  font-weight: 700;
+}
+.transition-picker-list button small {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 600;
+}
+.transition-picker-empty {
+  padding: 10px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.4;
+}
