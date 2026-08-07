@@ -329,32 +329,116 @@ describe("findKShortestBoundedPaths", () => {
     expect(result.stopReason).toBe("cancelled");
   });
 
-  it("accepts an empty future constraint model", () => {
+  it("accepts an empty Declare constraint list", () => {
     const result = findKShortestBoundedPaths(
       searchInput(
         ["A", "B"],
         [{ id: "ab", source: "A", target: "B" }],
-        { constraints: { requiredTransitions: [] } },
+        { constraints: { declare: [] } },
       ),
     );
-
     expect(result.paths.map((path) => path.edgeIds)).toEqual([["ab"]]);
   });
 
-  it("rejects non-empty transition constraints until matching is implemented", () => {
-    expect(() =>
-      findKShortestBoundedPaths(
-        searchInput(
-          ["A", "B"],
-          [{ id: "ab", source: "A", target: "B" }],
-          {
-            constraints: {
-              requiredTransitions: [{ transition: "Approve" }],
-            },
+  it("filters paths using a Declare Init constraint", () => {
+    const result = findKShortestBoundedPaths(
+      searchInput(
+        ["source", "left", "right", "target"],
+        [
+          { id: "bad-start", source: "source", target: "left", transition: "X" },
+          { id: "bad-end", source: "left", target: "target", transition: "B" },
+          { id: "good-start", source: "source", target: "right", transition: "A" },
+          { id: "good-end", source: "right", target: "target", transition: "B" },
+        ],
+        {
+          requestedPathCount: 2,
+          constraints: {
+            declare: [{
+              id: "starts-with-a",
+              template: "init",
+              enabled: true,
+              activation: {
+                relation: "or",
+                predicates: [{ transition: { operator: "equals", value: "A" } }],
+              },
+            }],
           },
-        ),
+        },
       ),
-    ).toThrow("Transition constraints are not implemented yet.");
+    );
+    expect(result.paths.map((path) => path.edgeIds)).toEqual([
+      ["good-start", "good-end"],
+    ]);
+  });
+
+  it("continues beyond an early target while Response is pending", () => {
+    const result = findKShortestBoundedPaths(
+      searchInput(
+        ["source", "target", "middle"],
+        [
+          { id: "activate", source: "source", target: "target", transition: "A" },
+          { id: "fulfil", source: "target", target: "middle", transition: "B" },
+          { id: "return", source: "middle", target: "target", transition: "X" },
+        ],
+        {
+          targetNodeId: "target",
+          requestedPathCount: 1,
+          maximumVisitsPerState: 2,
+          constraints: {
+            declare: [{
+              id: "a-responded-by-b",
+              template: "response",
+              enabled: true,
+              activation: { relation: "or", predicates: [{ transition: { operator: "equals", value: "A" } }] },
+              target: { relation: "or", predicates: [{ transition: { operator: "equals", value: "B" } }] },
+            }],
+          },
+        },
+      ),
+    );
+    expect(result.paths.map((path) => path.edgeIds)).toEqual([
+      ["activate", "fulfil", "return"],
+    ]);
+  });
+
+  it("uses transition data for correlated Response search", () => {
+    const result = findKShortestBoundedPaths(
+      searchInput(
+        ["source", "a", "wrong", "target"],
+        [
+          { id: "submit", source: "source", target: "a", transition: "Submit", inputs: { id: 42 } },
+          { id: "wrong", source: "a", target: "wrong", transition: "Complete", outputs: { id: 57 } },
+          { id: "right", source: "wrong", target: "target", transition: "Complete", outputs: { id: 42 } },
+        ],
+        {
+          requestedPathCount: 1,
+          constraints: {
+            declare: [{
+              id: "same-request",
+              template: "response",
+              enabled: true,
+              activation: {
+                relation: "or",
+                predicates: [{
+                  transition: { operator: "equals", value: "Submit" },
+                  captures: [{ alias: "request_id", source: "inputs", path: ["id"] }],
+                }],
+              },
+              target: { relation: "or", predicates: [{ transition: { operator: "equals", value: "Complete" } }] },
+              correlation: {
+                type: "comparison",
+                left: { kind: "target", source: "outputs", path: ["id"] },
+                operator: "=",
+                right: { kind: "activation", alias: "request_id" },
+              },
+            }],
+          },
+        },
+      ),
+    );
+    expect(result.paths.map((path) => path.edgeIds)).toEqual([
+      ["submit", "wrong", "right"],
+    ]);
   });
 
   it("rejects invalid search parameters", () => {
@@ -474,4 +558,161 @@ describe("findKShortestBoundedPaths", () => {
     expect(result.paths).toHaveLength(1);
     expect(result.paths[0].edgeIds).toHaveLength(nodeCount - 1);
   });
+  describe("optional target constraint-satisfaction mode", () => {
+    const responseConstraint = {
+      id: "response-a-b",
+      template: "response" as const,
+      enabled: true,
+      activation: {
+        relation: "or" as const,
+        predicates: [
+          { transition: { operator: "equals" as const, value: "A" } },
+        ],
+      },
+      target: {
+        relation: "or" as const,
+        predicates: [
+          { transition: { operator: "equals" as const, value: "B" } },
+        ],
+      },
+    };
+
+    it("finds the shortest endpoint where an exercised Response accepts", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "after-a", "satisfied", "later"],
+        edges: [
+          { id: "a", source: "source", target: "after-a", transition: "A" },
+          { id: "b", source: "after-a", target: "satisfied", transition: "B" },
+          { id: "later", source: "satisfied", target: "later", transition: "X" },
+        ],
+        sourceNodeId: "source",
+        endpointMode: "constraint-satisfaction",
+        requestedPathCount: 1,
+        maximumVisitsPerState: 1,
+        constraints: { declare: [responseConstraint] },
+      });
+
+      expect(result.paths).toEqual([
+        {
+          startNodeId: "source",
+          endNodeId: "satisfied",
+          edgeIds: ["a", "b"],
+        },
+      ]);
+    });
+
+    it("rejects vacuous Response satisfaction when exercise is required", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "unrelated"],
+        edges: [
+          { id: "x", source: "source", target: "unrelated", transition: "X" },
+        ],
+        sourceNodeId: "source",
+        endpointMode: "constraint-satisfaction",
+        requestedPathCount: 1,
+        maximumVisitsPerState: 1,
+        constraints: { declare: [responseConstraint] },
+      });
+
+      expect(result.paths).toEqual([]);
+      expect(result.exhausted).toBe(true);
+    });
+
+    it("allows vacuous satisfaction when exercise is explicitly disabled", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "unrelated"],
+        edges: [
+          { id: "x", source: "source", target: "unrelated", transition: "X" },
+        ],
+        sourceNodeId: "source",
+        endpointMode: "constraint-satisfaction",
+        requireConstraintExercise: false,
+        requestedPathCount: 1,
+        maximumVisitsPerState: 1,
+        constraints: { declare: [responseConstraint] },
+      });
+
+      expect(result.paths).toEqual([
+        { startNodeId: "source", endNodeId: "source", edgeIds: [] },
+      ]);
+    });
+
+    it("does not treat only a Precedence activation as exercise", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "after-a"],
+        edges: [{ id: "a", source: "source", target: "after-a", transition: "A" }],
+        sourceNodeId: "source",
+        endpointMode: "constraint-satisfaction",
+        requestedPathCount: 1,
+        maximumVisitsPerState: 1,
+        constraints: {
+          declare: [{
+            id: "a-before-b",
+            template: "precedence",
+            enabled: true,
+            activation: { relation: "or", predicates: [{ transition: { operator: "equals", value: "A" } }] },
+            target: { relation: "or", predicates: [{ transition: { operator: "equals", value: "B" } }] },
+          }],
+        },
+      });
+
+      expect(result.paths).toEqual([]);
+    });
+
+    it("accepts Exactly 0 without artificial exercise", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source"],
+        edges: [],
+        sourceNodeId: "source",
+        endpointMode: "constraint-satisfaction",
+        requestedPathCount: 1,
+        maximumVisitsPerState: 1,
+        constraints: {
+          declare: [{
+            id: "no-a",
+            template: "exactly",
+            enabled: true,
+            count: 0,
+            activation: { relation: "or", predicates: [{ transition: { operator: "equals", value: "A" } }] },
+          }],
+        },
+      });
+
+      expect(result.paths).toEqual([
+        { startNodeId: "source", endNodeId: "source", edgeIds: [] },
+      ]);
+    });
+
+    it("requires at least one enabled constraint without a target", () => {
+      expect(() =>
+        findKShortestBoundedPaths({
+          nodeIds: ["source"],
+          edges: [],
+          sourceNodeId: "source",
+          endpointMode: "constraint-satisfaction",
+          requestedPathCount: 1,
+          maximumVisitsPerState: 1,
+          constraints: { declare: [] },
+        }),
+      ).toThrow(
+        "At least one enabled Declare constraint is required when no target state is specified.",
+      );
+    });
+
+    it("keeps specific-target semantics and reports the actual endpoint", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "target"],
+        edges: [{ id: "edge", source: "source", target: "target" }],
+        sourceNodeId: "source",
+        targetNodeId: "target",
+        requestedPathCount: 1,
+        maximumVisitsPerState: 1,
+      });
+
+      expect(result.paths).toEqual([
+        { startNodeId: "source", edgeIds: ["edge"] },
+      ]);
+    });
+  });
+
 });

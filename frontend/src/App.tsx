@@ -1,6 +1,9 @@
 import {
   type ChangeEvent,
+  type CSSProperties,
   type FormEvent,
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
   useEffect,
   useRef,
   useState,
@@ -8,6 +11,9 @@ import {
 import cytoscape from "cytoscape";
 import "./App.css";
 import JsonViewer, { type JsonValue } from "./components/JsonViewer";
+import DeclareConstraintBuilder from "./graph/DeclareConstraintBuilder";
+import type { DeclareConstraint } from "./graph/declareConstraints";
+import { validateExecutableDeclareConstraint } from "./graph/declareMonitorFactory";
 import PathSelectionControls, {
   type PathSelectionMode,
 } from "./components/PathSelectionControls";
@@ -33,6 +39,17 @@ import { useGraphAnalysis } from "./graph/useGraphAnalysis";
 import { usePathSearch } from "./graph/usePathSearch";
 import type { BoundedPath } from "./graph/pathSearch";
 import type { StronglyConnectedComponent } from "./graph/graphAnalysis";
+import { buildTransitionCatalogue } from "./graph/transitionCatalog";
+import { buildTransitionDataCatalogue } from "./graph/transitionDataCatalogue";
+import {
+  SIDE_PANEL_COLLAPSED_STORAGE_KEY,
+  SIDE_PANEL_WIDTH_STORAGE_KEY,
+  clampSidePanelWidth,
+  getKeyboardResizedSidePanelWidth,
+  getSidePanelMaximumWidth,
+  parseStoredSidePanelCollapsed,
+  parseStoredSidePanelWidth,
+} from "./ui/sidePanelState";
 
 interface GraphNode {
   id: string;
@@ -81,6 +98,12 @@ interface GraphViewSnapshot {
 
 const TERMINAL_PAGE_SIZE = 100;
 const SCC_PAGE_SIZE = 100;
+function readStoredSidePanelWidth(): number {
+  return parseStoredSidePanelWidth(
+    window.localStorage.getItem(SIDE_PANEL_WIDTH_STORAGE_KEY),
+    window.innerWidth,
+  );
+}
 
 function App() {
   const graphContainer = useRef<HTMLDivElement | null>(null);
@@ -110,12 +133,20 @@ function App() {
   const [selectedPath, setSelectedPath] = useState<SelectedPath | null>(null);
   const [sidePanelMode, setSidePanelMode] =
     useState<SidePanelMode>("inspector");
+  const [sidePanelWidth, setSidePanelWidth] = useState(readStoredSidePanelWidth);
+  const [isSidePanelCollapsed, setIsSidePanelCollapsed] = useState(
+    () => parseStoredSidePanelCollapsed(
+      window.localStorage.getItem(SIDE_PANEL_COLLAPSED_STORAGE_KEY),
+    ),
+  );
   const graphAnalysis = useGraphAnalysis();
   const pathSearch = usePathSearch();
   const [pathSearchSource, setPathSearchSource] = useState("");
   const [pathSearchTarget, setPathSearchTarget] = useState("");
   const [requestedPathCount, setRequestedPathCount] = useState(5);
   const [maximumVisitsPerState, setMaximumVisitsPerState] = useState(1);
+  const [requireConstraintExercise, setRequireConstraintExercise] = useState(true);
+  const [declareConstraints, setDeclareConstraints] = useState<DeclareConstraint[]>([]);
   const [shownSearchPathIndex, setShownSearchPathIndex] = useState<number | null>(null);
   const [computedPathViewActive, setComputedPathViewActive] = useState(false);
   const [focusedComputedStepKey, setFocusedComputedStepKey] = useState<string | null>(null);
@@ -131,6 +162,51 @@ function App() {
   const [selectedCyclicComponentId, setSelectedCyclicComponentId] =
     useState<number | null>(null);
 
+  function beginSidePanelResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (isSidePanelCollapsed || event.button !== 0) return;
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startWidth = sidePanelWidth;
+    document.body.classList.add("resizing-side-panel");
+
+    const handlePointerMove = (pointerEvent: globalThis.PointerEvent) => {
+      setSidePanelWidth(
+        clampSidePanelWidth(
+          startWidth + startX - pointerEvent.clientX,
+          window.innerWidth,
+        ),
+      );
+    };
+    const finishResize = () => {
+      document.body.classList.remove("resizing-side-panel");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", finishResize);
+      window.removeEventListener("pointercancel", finishResize);
+      window.requestAnimationFrame(() => cyRef.current?.resize());
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", finishResize);
+    window.addEventListener("pointercancel", finishResize);
+  }
+
+  function resizeSidePanelWithKeyboard(event: KeyboardEvent<HTMLDivElement>) {
+    const nextWidth = getKeyboardResizedSidePanelWidth(
+      sidePanelWidth,
+      event.key,
+      event.shiftKey,
+      window.innerWidth,
+    );
+    if (nextWidth === null) return;
+    event.preventDefault();
+    setSidePanelWidth(nextWidth);
+  }
+
+  function toggleSidePanel() {
+    setIsSidePanelCollapsed((collapsed) => !collapsed);
+  }
+
   function updatePathMode(mode: PathSelectionMode) {
     pathModeRef.current = mode;
     setPathMode(mode);
@@ -139,6 +215,20 @@ function App() {
   function updateSelectedPath(path: SelectedPath | null) {
     selectedPathRef.current = path;
     setSelectedPath(path);
+  }
+
+  function invalidatePathSearchResults() {
+    if (pathSearch.status !== "not-run") {
+      pathSearch.reset();
+      setShownSearchPathIndex(null);
+      setFocusedComputedStepKey(null);
+      setComputedPathViewActive(false);
+    }
+  }
+
+  function changeDeclareConstraints(constraints: DeclareConstraint[]) {
+    invalidatePathSearchResults();
+    setDeclareConstraints(constraints);
   }
 
   function makeNodeInspector(node: cytoscape.NodeSingular): InspectorInfo {
@@ -320,7 +410,10 @@ function App() {
       });
   }
 
-  function showPathContext(path: SelectedPath) {
+  function showPathContext(
+    path: SelectedPath,
+    positionCompletePath = false,
+  ) {
     const graph = graphRef.current;
     const cy = cyRef.current;
     if (!graph || !cy) return;
@@ -328,9 +421,11 @@ function App() {
     const resolvedPath = resolvePath(graph, path);
     const selectedEdges = resolvedPath.edges;
     const pathNodeIds = resolvedPath.nodeIds;
+    const uniquePathNodeIds = [...new Set(pathNodeIds)];
+    const pathNodeIdSet = new Set(uniquePathNodeIds);
     const endNodeId = resolvedPath.endNodeId;
     const outgoingEdges = getCandidateEdges(graph, path);
-    const requiredNodeIds = new Set<string>(pathNodeIds);
+    const requiredNodeIds = new Set<string>(uniquePathNodeIds);
     const requiredEdgeIds = new Set<string>([
       ...path.edgeIds,
       ...outgoingEdges.map((edge) => edge.id),
@@ -349,40 +444,103 @@ function App() {
       .remove();
     cy.endBatch();
 
-    const missingNodeIds = new Set(
-      [...requiredNodeIds].filter((nodeId) => cy.getElementById(nodeId).empty())
+    const missingPathNodeIds = uniquePathNodeIds.filter(
+      (nodeId) => cy.getElementById(nodeId).empty(),
     );
+    const missingCandidateNodeIds = [
+      ...new Set(outgoingEdges.map((edge) => edge.target)),
+    ].filter(
+      (nodeId) =>
+        !pathNodeIdSet.has(nodeId) && cy.getElementById(nodeId).empty(),
+    );
+    const missingNodeIds = new Set([
+      ...missingPathNodeIds,
+      ...missingCandidateNodeIds,
+    ]);
     const missingEdges = [...selectedEdges, ...outgoingEdges].filter(
-      (edge) => cy.getElementById(edge.id).empty()
+      (edge) => cy.getElementById(edge.id).empty(),
     );
 
-    const endpoint = cy.getElementById(endNodeId);
-    const endpointPosition = endpoint.nonempty()
-      ? endpoint.position()
-      : { x: 160, y: 160 };
-    const targetNodeIds = [...new Set(outgoingEdges.map((edge) => edge.target))];
+    const firstVisiblePathNode = uniquePathNodeIds
+      .map((nodeId) => cy.getElementById(nodeId))
+      .find((node) => node.nonempty());
+    const pathOrigin = firstVisiblePathNode?.position() ?? { x: 160, y: 160 };
 
     cy.startBatch();
 
     if (missingNodeIds.size > 0) {
-      const nodeElements = buildElements(graph, missingNodeIds, [], showTransitionLabels);
-      cy.add(nodeElements);
+      cy.add(
+        buildElements(
+          graph,
+          missingNodeIds,
+          [],
+          showTransitionLabels,
+        ),
+      );
 
-      [...missingNodeIds].forEach((nodeId) => {
-        const targetIndex = Math.max(0, targetNodeIds.indexOf(nodeId));
+      if (positionCompletePath) {
+        // Computed paths can contain many nodes that were not part of the
+        // previous neighborhood. Give those path nodes deterministic,
+        // non-overlapping positions in traversal order. Existing visible path
+        // nodes retain their coordinates, preserving the user's orientation.
+        const columnCount = Math.max(
+          1,
+          Math.ceil(Math.sqrt(uniquePathNodeIds.length)),
+        );
+        const horizontalSpacing = 230;
+        const verticalSpacing = 155;
+
+        missingPathNodeIds.forEach((nodeId) => {
+          const pathIndex = uniquePathNodeIds.indexOf(nodeId);
+          const row = Math.floor(pathIndex / columnCount);
+          const positionInRow = pathIndex % columnCount;
+          const column =
+            row % 2 === 0
+              ? positionInRow
+              : columnCount - positionInRow - 1;
+
+          cy.getElementById(nodeId).position({
+            x: pathOrigin.x + column * horizontalSpacing,
+            y: pathOrigin.y + row * verticalSpacing,
+          });
+        });
+      }
+
+      const endpoint = cy.getElementById(endNodeId);
+      const endpointPosition = endpoint.nonempty()
+        ? endpoint.position()
+        : pathOrigin;
+
+      missingCandidateNodeIds.forEach((nodeId, index) => {
         const verticalOffset =
-          targetIndex - (Math.max(targetNodeIds.length, 1) - 1) / 2;
+          index - (Math.max(missingCandidateNodeIds.length, 1) - 1) / 2;
         cy.getElementById(nodeId).position({
           x: endpointPosition.x + 230,
           y: endpointPosition.y + verticalOffset * 135,
         });
       });
+
+      // Preserve the original manual path-selection behavior. During manual
+      // extension only successor candidates are normally missing.
+      if (!positionCompletePath) {
+        const targetNodeIds = [
+          ...new Set(outgoingEdges.map((edge) => edge.target)),
+        ];
+
+        missingPathNodeIds.forEach((nodeId) => {
+          const targetIndex = Math.max(0, targetNodeIds.indexOf(nodeId));
+          const verticalOffset =
+            targetIndex - (Math.max(targetNodeIds.length, 1) - 1) / 2;
+          cy.getElementById(nodeId).position({
+            x: endpointPosition.x + 230,
+            y: endpointPosition.y + verticalOffset * 135,
+          });
+        });
+      }
     }
 
     if (missingEdges.length > 0) {
-      cy.add(
-        buildElements(graph, new Set<string>(), missingEdges, true)
-      );
+      cy.add(buildElements(graph, new Set<string>(), missingEdges, true));
     }
 
     cy.nodes().unlock();
@@ -769,8 +927,31 @@ function App() {
       setStatus(`Source state ${sourceNodeId || "(empty)"} was not found`);
       return;
     }
-    if (!graph.nodes.some((node) => node.id === targetNodeId)) {
-      setStatus(`Target state ${targetNodeId || "(empty)"} was not found`);
+    const enabledConstraints = declareConstraints.filter(
+      (constraint) => constraint.enabled,
+    );
+    if (!targetNodeId && enabledConstraints.length === 0) {
+      setStatus(
+        "Enter a target state or configure at least one enabled constraint.",
+      );
+      return;
+    }
+    if (
+      targetNodeId &&
+      !graph.nodes.some((node) => node.id === targetNodeId)
+    ) {
+      setStatus(`Target state ${targetNodeId} was not found`);
+      return;
+    }
+    const constraintErrors = enabledConstraints
+      .filter((constraint) => constraint.enabled)
+      .flatMap((constraint) =>
+        validateExecutableDeclareConstraint(constraint).map(
+          (error) => `${constraint.id}: ${error}`,
+        ),
+      );
+    if (constraintErrors.length > 0) {
+      setStatus(`Fix the Declare constraints: ${constraintErrors.join(" ")}`);
       return;
     }
     setShownSearchPathIndex(null);
@@ -780,14 +961,27 @@ function App() {
         id: edge.id,
         source: edge.source,
         target: edge.target,
+        transition: edge.transition,
+        color: edge.color,
+        inputs_raw: edge.inputs_raw,
+        inputs: edge.inputs,
+        outputs_raw: edge.outputs_raw,
+        outputs: edge.outputs,
       })),
       sourceNodeId,
-      targetNodeId,
+      ...(targetNodeId
+        ? { targetNodeId, endpointMode: "specific-target" as const }
+        : { endpointMode: "constraint-satisfaction" as const }),
       requestedPathCount,
       maximumVisitsPerState,
-      constraints: {},
+      requireConstraintExercise,
+      constraints: { declare: declareConstraints },
     });
-    setStatus(`Searching for up to ${requestedPathCount} paths from ${sourceNodeId} to ${targetNodeId}`);
+    setStatus(
+      targetNodeId
+        ? `Searching for up to ${requestedPathCount} paths from ${sourceNodeId} to ${targetNodeId}`
+        : `Searching for up to ${requestedPathCount} constraint-satisfying paths from ${sourceNodeId}`,
+    );
   }
 
   function captureGraphViewBeforeComputedPath() {
@@ -867,7 +1061,7 @@ function App() {
       setSelectedCyclicComponentId(null);
       updateSelectedPath(selected);
       updatePathMode("idle");
-      showPathContext(selected);
+      showPathContext(selected, true);
       setShownSearchPathIndex(index);
       setFocusedComputedStepKey(null);
       setComputedPathViewActive(true);
@@ -895,6 +1089,7 @@ function App() {
 
     graphAnalysis.reset();
     pathSearch.reset();
+    setDeclareConstraints([]);
     setShownSearchPathIndex(null);
     setFocusedComputedStepKey(null);
     setComputedPathViewActive(false);
@@ -933,7 +1128,8 @@ function App() {
         ? "0"
         : graph.nodes[0].id;
       setPathSearchSource(defaultPathState);
-      setPathSearchTarget(defaultPathState);
+      setPathSearchTarget("");
+      setRequireConstraintExercise(true);
 
       if (importedPath) {
         const resolved = resolvePath(graph, importedPath);
@@ -1237,6 +1433,32 @@ function App() {
   }, [pathMode, selectedPath?.edgeIds.length]);
 
   useEffect(() => {
+    window.localStorage.setItem(
+      SIDE_PANEL_WIDTH_STORAGE_KEY,
+      String(Math.round(sidePanelWidth)),
+    );
+  }, [sidePanelWidth]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      SIDE_PANEL_COLLAPSED_STORAGE_KEY,
+      String(isSidePanelCollapsed),
+    );
+    const frame = window.requestAnimationFrame(() => cyRef.current?.resize());
+    return () => window.cancelAnimationFrame(frame);
+  }, [isSidePanelCollapsed]);
+
+  useEffect(() => {
+    const handleWindowResize = () => {
+      setSidePanelWidth((current) =>
+        clampSidePanelWidth(current, window.innerWidth),
+      );
+    };
+    window.addEventListener("resize", handleWindowResize);
+    return () => window.removeEventListener("resize", handleWindowResize);
+  }, []);
+
+  useEffect(() => {
     const container = graphContainer.current;
     const cy = cyRef.current;
     if (!container || !cy || typeof ResizeObserver === "undefined") {
@@ -1251,6 +1473,16 @@ function App() {
     return () => observer.disconnect();
   }, []);
 
+  const transitionOptions = buildTransitionCatalogue(
+    graphRef.current?.edges.map((edge) => edge.transition) ?? [],
+  );
+  const transitionDataCatalogue = buildTransitionDataCatalogue(
+    graphRef.current?.edges.map((edge) => ({
+      transition: edge.transition,
+      inputs: edge.inputs,
+      outputs: edge.outputs,
+    })) ?? [],
+  );
   const visibleInspector = pinnedInspector ?? inspectorInfo;
   const selectedPathEdges = selectedPath?.edgeIds ?? [];
   const selectedPathEndNodeId = (() => {
@@ -1593,7 +1825,14 @@ function App() {
         />
       </section>
 
-      <section className="workspace">
+      <section
+        className={`workspace${isSidePanelCollapsed ? " side-panel-collapsed" : ""}`}
+        style={
+          {
+            "--side-panel-width": `${sidePanelWidth}px`,
+          } as CSSProperties
+        }
+      >
         <div className="graph-panel">
           {!graphLoaded && (
             <div className="empty-overlay">
@@ -1604,7 +1843,47 @@ function App() {
           <div ref={graphContainer} className="graph-container" />
         </div>
 
-        <aside className="inspector">
+        {!isSidePanelCollapsed && (
+          <div
+            className="side-panel-resizer"
+            role="separator"
+            aria-label="Resize side panel"
+            aria-orientation="vertical"
+            aria-valuemin={380}
+            aria-valuemax={getSidePanelMaximumWidth(window.innerWidth)}
+            aria-valuenow={Math.round(sidePanelWidth)}
+            tabIndex={0}
+            onPointerDown={beginSidePanelResize}
+            onKeyDown={resizeSidePanelWithKeyboard}
+            title="Drag to resize. Use arrow keys when focused."
+          />
+        )}
+        <aside className="inspector" aria-label="Graph tools">
+          <div className="side-panel-shell-header">
+            {!isSidePanelCollapsed && (
+              <span className="side-panel-shell-title">Graph tools</span>
+            )}
+            <button
+              type="button"
+              className={
+                isSidePanelCollapsed
+                  ? "side-panel-expand-button"
+                  : "side-panel-collapse-button"
+              }
+              onClick={toggleSidePanel}
+              aria-label={
+                isSidePanelCollapsed ? "Expand side panel" : "Collapse side panel"
+              }
+              aria-expanded={!isSidePanelCollapsed}
+              title={
+                isSidePanelCollapsed ? "Expand side panel" : "Collapse side panel"
+              }
+            >
+              <span aria-hidden="true">{isSidePanelCollapsed ? "<" : ">"}</span>
+            </button>
+          </div>
+          {!isSidePanelCollapsed && (
+            <div className="side-panel-content">
           <div className="side-panel-tabs" role="tablist" aria-label="Side panel">
             <button
               type="button"
@@ -1892,7 +2171,7 @@ function App() {
                               >
                                 <span>Cyclic component {getCyclicComponentNumber(component.id)}</span>
                                 <small>
-                                  {component.nodeIds.length} states ·{" "}
+                                  {component.nodeIds.length} states Â·{" "}
                                   {component.internalEdgeIds.length} transitions
                                 </small>
                               </button>
@@ -2015,19 +2294,57 @@ function App() {
                 <>
                   <form className="path-search-form" onSubmit={runPathSearch}>
                     <label htmlFor="path-search-source">Source state</label>
-                    <input id="path-search-source" value={pathSearchSource} onChange={(event) => setPathSearchSource(event.target.value)} disabled={pathSearch.status === "running"} />
-                    <label htmlFor="path-search-target">Target state</label>
-                    <input id="path-search-target" value={pathSearchTarget} onChange={(event) => setPathSearchTarget(event.target.value)} disabled={pathSearch.status === "running"} />
+                    <input id="path-search-source" value={pathSearchSource} onChange={(event) => { invalidatePathSearchResults(); setPathSearchSource(event.target.value); }} disabled={pathSearch.status === "running"} />
+                    <label htmlFor="path-search-target">Target state (optional)</label>
+                    <input
+                      id="path-search-target"
+                      value={pathSearchTarget}
+                      placeholder="Leave empty to end at any state"
+                      onChange={(event) => {
+                        invalidatePathSearchResults();
+                        const nextTarget = event.target.value;
+                        setPathSearchTarget(nextTarget);
+                        if (!nextTarget.trim()) {
+                          setRequireConstraintExercise(true);
+                        }
+                      }}
+                      disabled={pathSearch.status === "running"}
+                    />
+                    <label className="path-search-checkbox" htmlFor="path-search-exercise">
+                      <input
+                        id="path-search-exercise"
+                        type="checkbox"
+                        checked={requireConstraintExercise}
+                        onChange={(event) => {
+                          invalidatePathSearchResults();
+                          setRequireConstraintExercise(event.target.checked);
+                        }}
+                        disabled={pathSearch.status === "running"}
+                      />
+                      <span>Require constraints to be exercised</span>
+                    </label>
+                    <p className="path-search-help">
+                      Without a target, paths may end at any state after all enabled
+                      constraints are satisfied. Exercise checking prevents vacuous
+                      matches where a constraint never participates.
+                    </p>
                     <div className="path-search-number-row">
                       <div>
                         <label htmlFor="path-search-count">Number of paths</label>
-                        <input id="path-search-count" type="number" min="1" max="100" step="1" value={requestedPathCount} onChange={(event) => setRequestedPathCount(Math.max(1, Number.parseInt(event.target.value, 10) || 1))} disabled={pathSearch.status === "running"} />
+                        <input id="path-search-count" type="number" min="1" max="100" step="1" value={requestedPathCount} onChange={(event) => { invalidatePathSearchResults(); setRequestedPathCount(Math.max(1, Number.parseInt(event.target.value, 10) || 1)); }} disabled={pathSearch.status === "running"} />
                       </div>
                       <div>
                         <label htmlFor="path-search-visits">Visits per state</label>
-                        <input id="path-search-visits" type="number" min="1" max="10" step="1" value={maximumVisitsPerState} onChange={(event) => setMaximumVisitsPerState(Math.max(1, Number.parseInt(event.target.value, 10) || 1))} disabled={pathSearch.status === "running"} />
+                        <input id="path-search-visits" type="number" min="1" max="10" step="1" value={maximumVisitsPerState} onChange={(event) => { invalidatePathSearchResults(); setMaximumVisitsPerState(Math.max(1, Number.parseInt(event.target.value, 10) || 1)); }} disabled={pathSearch.status === "running"} />
                       </div>
                     </div>
+                    <DeclareConstraintBuilder
+                      constraints={declareConstraints}
+                      transitionOptions={transitionOptions}
+                      transitionDataCatalogue={transitionDataCatalogue}
+                      disabled={pathSearch.status === "running"}
+                      onChange={changeDeclareConstraints}
+                    />
                     <p className="analysis-note">A visit limit of 1 produces loopless paths. Higher values allow bounded revisits. Paths are unique by ordered edge IDs.</p>
                     {pathSearch.status === "running" ? (
                       <button type="button" onClick={pathSearch.cancel}>Cancel</button>
@@ -2045,7 +2362,7 @@ function App() {
                         <span>{pathSearch.result.expandedCandidateCount} candidates expanded</span>
                       </div>
                       {pathSearch.result.paths.length === 0 ? (
-                        <p className="analysis-note">No path satisfies the selected visit bound.</p>
+                        <p className="analysis-note">{pathSearchTarget.trim() ? "No path reaches the target while satisfying the configured constraints and visit bound." : "No path satisfies the configured constraints and visit bound."}</p>
                       ) : (
                         <div className="computed-path-list">
                           {pathSearch.result.paths.map((path, index) => {
@@ -2069,6 +2386,11 @@ function App() {
                                   <small>
                                     {path.edgeIds.length} transition
                                     {path.edgeIds.length === 1 ? "" : "s"}
+                                    {` Â· Ends at state ${
+                                      path.endNodeId ??
+                                      steps.at(-1)?.target ??
+                                      path.startNodeId
+                                    }`}
                                   </small>
                                 </button>
                                 <details className="computed-path-details">
@@ -2110,7 +2432,7 @@ function App() {
                                             >
                                               {step.source}
                                             </button>
-                                            <span aria-hidden="true">→</span>
+                                            <span aria-hidden="true">â†’</span>
                                             <button
                                               type="button"
                                               onClick={() =>
@@ -2153,6 +2475,8 @@ function App() {
               )}
             </section>
           )}
+            </div>
+          )}
         </aside>
       </section>
     </main>
@@ -2160,3 +2484,4 @@ function App() {
 }
 
 export default App;
+
