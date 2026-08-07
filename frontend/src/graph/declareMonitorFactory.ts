@@ -21,6 +21,10 @@ import {
 } from "./declareExistenceMonitors";
 import type { DeclareMonitor } from "./declareMonitor";
 import {
+  evaluateDeclarePredicateGroup,
+  type DeclareTransition,
+} from "./declarePredicates";
+import {
   createAlternatePrecedenceMonitor,
   createChainPrecedenceMonitor,
   createNotAlternatePrecedenceMonitor,
@@ -52,6 +56,8 @@ import {
 export type CompiledDeclareConstraint = {
   id: string;
   monitor: DeclareMonitor<unknown>;
+  requiresExercise: boolean;
+  isExercisedBy(edge: DeclareTransition): boolean;
 };
 
 function requireGroup(
@@ -227,6 +233,67 @@ export function createDeclareMonitor(
   }
 }
 
+
+function groupMatches(
+  group: DeclarePredicateGroup | undefined,
+  edge: DeclareTransition,
+): boolean {
+  return group !== undefined && evaluateDeclarePredicateGroup(group, edge).matches;
+}
+
+function createExercisePolicy(constraint: DeclareConstraint): Pick<
+  CompiledDeclareConstraint,
+  "requiresExercise" | "isExercisedBy"
+> {
+  const activationMatches = (edge: DeclareTransition) =>
+    groupMatches(constraint.activation, edge);
+  const targetMatches = (edge: DeclareTransition) =>
+    groupMatches(constraint.target, edge);
+  const eitherMatches = (edge: DeclareTransition) =>
+    activationMatches(edge) || targetMatches(edge);
+
+  switch (constraint.template) {
+    case "at-most":
+      return { requiresExercise: false, isExercisedBy: activationMatches };
+    case "at-least":
+    case "exactly":
+    case "exactly-consecutive":
+      return {
+        requiresExercise: (constraint.count ?? 0) > 0,
+        isExercisedBy: activationMatches,
+      };
+    case "init":
+    case "end":
+      return { requiresExercise: true, isExercisedBy: activationMatches };
+    case "precedence":
+    case "not-precedence":
+    case "chain-precedence":
+    case "not-chain-precedence":
+    case "alternate-precedence":
+    case "not-alternate-precedence":
+      return { requiresExercise: true, isExercisedBy: targetMatches };
+    case "response":
+    case "not-response":
+    case "chain-response":
+    case "not-chain-response":
+    case "alternate-response":
+    case "not-alternate-response":
+    case "responded-existence":
+    case "not-responded-existence":
+      return { requiresExercise: true, isExercisedBy: activationMatches };
+    case "choice":
+    case "exclusive-choice":
+    case "coexistence":
+    case "not-coexistence":
+    case "succession":
+    case "not-succession":
+    case "chain-succession":
+    case "not-chain-succession":
+    case "alternate-succession":
+    case "not-alternate-succession":
+      return { requiresExercise: true, isExercisedBy: eitherMatches };
+  }
+}
 export function compileDeclareConstraints(
   constraints: readonly DeclareConstraint[],
 ): CompiledDeclareConstraint[] {
@@ -243,5 +310,6 @@ export function compileDeclareConstraints(
   return enabled.map((constraint) => ({
     id: constraint.id,
     monitor: createDeclareMonitor(constraint),
+    ...createExercisePolicy(constraint),
   }));
 }

@@ -5,7 +5,10 @@ import {
   getMonitorSetStatus,
   type MonitorSetEntry,
 } from "./declareMonitor";
-import { compileDeclareConstraints } from "./declareMonitorFactory";
+import {
+  compileDeclareConstraints,
+  type CompiledDeclareConstraint,
+} from "./declareMonitorFactory";
 
 export type PathSearchEdge = {
   id: string;
@@ -20,11 +23,17 @@ export type PathConstraints = {
   declare?: DeclareConstraint[];
 };
 
+export type PathSearchEndpointMode =
+  | "specific-target"
+  | "constraint-satisfaction";
+
 export type PathSearchInput = {
   nodeIds: string[];
   edges: PathSearchEdge[];
   sourceNodeId: string;
-  targetNodeId: string;
+  targetNodeId?: string;
+  endpointMode?: PathSearchEndpointMode;
+  requireConstraintExercise?: boolean;
   requestedPathCount: number;
   maximumVisitsPerState: number;
   constraints?: PathConstraints;
@@ -32,6 +41,7 @@ export type PathSearchInput = {
 
 export type BoundedPath = {
   startNodeId: string;
+  endNodeId?: string;
   edgeIds: string[];
 };
 
@@ -70,6 +80,7 @@ type SearchCandidate = {
   depth: number;
   estimatedTotalCost: number;
   monitorEntries: MonitorSetEntry[];
+  exercisedConstraintIds: ReadonlySet<string>;
   insertionSequence: number;
 };
 
@@ -183,8 +194,23 @@ function buildTopology(input: PathSearchInput): NormalizedTopology {
     throw new Error(`Source state ${input.sourceNodeId} does not exist.`);
   }
 
-  if (!knownNodeIds.has(input.targetNodeId)) {
-    throw new Error(`Target state ${input.targetNodeId} does not exist.`);
+  const endpointMode = input.endpointMode ??
+    (input.targetNodeId === undefined
+      ? "constraint-satisfaction"
+      : "specific-target");
+
+  if (endpointMode === "specific-target") {
+    if (input.targetNodeId === undefined || input.targetNodeId.length === 0) {
+      throw new Error("A target state is required in specific-target mode.");
+    }
+
+    if (!knownNodeIds.has(input.targetNodeId)) {
+      throw new Error(`Target state ${input.targetNodeId} does not exist.`);
+    }
+  } else if (input.targetNodeId !== undefined) {
+    throw new Error(
+      "Target state must be omitted in constraint-satisfaction mode.",
+    );
   }
 
   if (!Number.isInteger(input.requestedPathCount) || input.requestedPathCount < 1) {
@@ -318,6 +344,44 @@ function createPathKey(edgeIds: string[]): string {
   return JSON.stringify(edgeIds);
 }
 
+function resolveEndpointMode(input: PathSearchInput): PathSearchEndpointMode {
+  return input.endpointMode ??
+    (input.targetNodeId === undefined
+      ? "constraint-satisfaction"
+      : "specific-target");
+}
+
+function updateExercisedConstraintIds(
+  compiledConstraints: readonly CompiledDeclareConstraint[],
+  edge: PathSearchEdge,
+  exercisedConstraintIds: ReadonlySet<string>,
+): ReadonlySet<string> {
+  let updated: Set<string> | null = null;
+
+  for (const constraint of compiledConstraints) {
+    if (
+      !exercisedConstraintIds.has(constraint.id) &&
+      constraint.isExercisedBy(edge)
+    ) {
+      updated ??= new Set(exercisedConstraintIds);
+      updated.add(constraint.id);
+    }
+  }
+
+  return updated ?? exercisedConstraintIds;
+}
+
+function areRequiredConstraintsExercised(
+  compiledConstraints: readonly CompiledDeclareConstraint[],
+  exercisedConstraintIds: ReadonlySet<string>,
+  required: boolean,
+): boolean {
+  return !required || compiledConstraints.every(
+    (constraint) =>
+      !constraint.requiresExercise || exercisedConstraintIds.has(constraint.id),
+  );
+}
+
 /**
  * Finds up to K shortest unique paths with bounded state visits.
  *
@@ -330,10 +394,11 @@ export function findKShortestBoundedPaths(
   options: PathSearchOptions = {},
 ): PathSearchResult {
   const topology = buildTopology(input);
-  const distancesToTarget = computeDistancesToTarget(
-    topology,
-    input.targetNodeId,
-  );
+  const endpointMode = resolveEndpointMode(input);
+  const distancesToTarget =
+    endpointMode === "specific-target" && input.targetNodeId !== undefined
+      ? computeDistancesToTarget(topology, input.targetNodeId)
+      : new Map<string, number>();
   const maximumExpandedCandidates = validateResourceLimit(
     options.maximumExpandedCandidates,
     DEFAULT_MAXIMUM_EXPANDED_CANDIDATES,
@@ -349,6 +414,18 @@ export function findKShortestBoundedPaths(
     input.constraints?.declare ?? [],
   );
   const initialMonitorEntries = createMonitorSet(compiledConstraints);
+  const requireConstraintExercise =
+    endpointMode === "constraint-satisfaction" &&
+    (input.requireConstraintExercise ?? true);
+
+  if (
+    endpointMode === "constraint-satisfaction" &&
+    initialMonitorEntries.length === 0
+  ) {
+    throw new Error(
+      "At least one enabled Declare constraint is required when no target state is specified.",
+    );
+  }
 
   const queue = new CandidateMinHeap();
   let nextInsertionSequence = 1;
@@ -363,8 +440,11 @@ export function findKShortestBoundedPaths(
     incomingEdgeId: null,
     depth: 0,
     estimatedTotalCost:
-      distancesToTarget.get(input.sourceNodeId) ?? Number.POSITIVE_INFINITY,
+      endpointMode === "specific-target"
+        ? distancesToTarget.get(input.sourceNodeId) ?? Number.POSITIVE_INFINITY
+        : 0,
     monitorEntries: initialMonitorEntries,
+    exercisedConstraintIds: new Set<string>(),
     insertionSequence: 0,
   });
 
@@ -391,12 +471,21 @@ export function findKShortestBoundedPaths(
     expandedCandidateCount += 1;
     const isZeroTransitionSourceTargetPath =
       candidate.depth === 0 &&
+      endpointMode === "specific-target" &&
       input.sourceNodeId === input.targetNodeId;
+    const endpointMatches =
+      endpointMode === "constraint-satisfaction" ||
+      candidate.currentNodeId === input.targetNodeId;
 
-    if (candidate.currentNodeId === input.targetNodeId) {
+    if (endpointMatches) {
       const monitorStatus = getMonitorSetStatus(candidate.monitorEntries);
+      const exerciseSatisfied = areRequiredConstraintsExercised(
+        compiledConstraints,
+        candidate.exercisedConstraintIds,
+        requireConstraintExercise,
+      );
 
-      if (monitorStatus.accepting) {
+      if (monitorStatus.accepting && exerciseSatisfied) {
         const edgeIds = reconstructEdgeIds(candidate);
         const pathKey = createPathKey(edgeIds);
 
@@ -404,27 +493,40 @@ export function findKShortestBoundedPaths(
           emittedPathKeys.add(pathKey);
           paths.push({
             startNodeId: input.sourceNodeId,
+            ...(endpointMode === "constraint-satisfaction"
+              ? { endNodeId: candidate.currentNodeId }
+              : {}),
             edgeIds,
           });
         }
 
-        // The initial source-equals-target candidate must still be expanded so
-        // non-empty returning paths can be found. Other accepted arrivals end.
-        if (!isZeroTransitionSourceTargetPath) {
+        // A non-empty specific-target arrival ends at that target. In
+        // constraint-satisfaction mode the candidate remains expandable so
+        // additional, longer satisfying paths can still be enumerated.
+        if (
+          endpointMode === "specific-target" &&
+          !isZeroTransitionSourceTargetPath
+        ) {
           continue;
         }
       }
-      // A target arrival with pending obligations remains expandable because a
-      // later transition may satisfy the constraints before returning here.
+      // A specific-target arrival with pending obligations remains expandable
+      // because a later transition may satisfy them before returning.
     }
 
     const outgoingEdges =
       topology.outgoingEdgesByNodeId.get(candidate.currentNodeId) ?? [];
 
     for (const edge of outgoingEdges) {
-      const remainingDistance = distancesToTarget.get(edge.target);
+      const remainingDistance =
+        endpointMode === "specific-target"
+          ? distancesToTarget.get(edge.target)
+          : 0;
 
-      if (remainingDistance === undefined) {
+      if (
+        endpointMode === "specific-target" &&
+        remainingDistance === undefined
+      ) {
         continue;
       }
 
@@ -444,19 +546,25 @@ export function findKShortestBoundedPaths(
         edge,
       );
 
-      const nextMonitorStatus = getMonitorSetStatus(nextMonitorEntries);
-
-      if (!nextMonitorStatus.viable) {
+      if (!getMonitorSetStatus(nextMonitorEntries).viable) {
         continue;
       }
+
+      const nextExercisedConstraintIds = updateExercisedConstraintIds(
+        compiledConstraints,
+        edge,
+        candidate.exercisedConstraintIds,
+      );
 
       queue.push({
         currentNodeId: edge.target,
         parent: candidate,
         incomingEdgeId: edge.id,
         depth: candidate.depth + 1,
-        estimatedTotalCost: candidate.depth + 1 + remainingDistance,
+        estimatedTotalCost:
+          candidate.depth + 1 + (remainingDistance ?? 0),
         monitorEntries: nextMonitorEntries,
+        exercisedConstraintIds: nextExercisedConstraintIds,
         insertionSequence: nextInsertionSequence,
       });
       nextInsertionSequence += 1;
