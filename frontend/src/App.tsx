@@ -29,6 +29,10 @@ import {
   parseGraphJsonText,
   serializeGraphJson,
 } from "./graph/graphJson";
+import { useGraphAnalysis } from "./graph/useGraphAnalysis";
+import { usePathSearch } from "./graph/usePathSearch";
+import type { BoundedPath } from "./graph/pathSearch";
+import type { StronglyConnectedComponent } from "./graph/graphAnalysis";
 
 interface GraphNode {
   id: string;
@@ -54,6 +58,7 @@ interface GraphData {
 }
 
 type OverviewLayout = "hierarchical" | "grid";
+type SidePanelMode = "inspector" | "analysis" | "paths";
 
 interface InspectorInfo {
   type: "node" | "edge";
@@ -61,6 +66,21 @@ interface InspectorInfo {
   subtitle?: string;
   data: JsonValue;
 }
+interface GraphViewSnapshot {
+  nodeIds: string[];
+  edgeIds: string[];
+  positions: Record<string, { x: number; y: number }>;
+  zoom: number;
+  pan: { x: number; y: number };
+  showingAll: boolean;
+  selectedStateId: string | null;
+  searchText: string;
+  hopCount: number;
+  overviewLayout: OverviewLayout;
+}
+
+const TERMINAL_PAGE_SIZE = 100;
+const SCC_PAGE_SIZE = 100;
 
 function App() {
   const graphContainer = useRef<HTMLDivElement | null>(null);
@@ -72,6 +92,7 @@ function App() {
   const selectedPathRef = useRef<SelectedPath | null>(null);
   const showPathContextRef = useRef<(path: SelectedPath) => void>(() => {});
   const addEdgeToPathRef = useRef<(edgeId: string) => void>(() => {});
+  const graphViewBeforeComputedPathRef = useRef<GraphViewSnapshot | null>(null);
 
   const [status, setStatus] = useState("Select an LTS graph file to begin");
   const [fileName, setFileName] = useState("");
@@ -87,6 +108,28 @@ function App() {
   const [pinnedInspector, setPinnedInspector] = useState<InspectorInfo | null>(null);
   const [pathMode, setPathMode] = useState<PathSelectionMode>("idle");
   const [selectedPath, setSelectedPath] = useState<SelectedPath | null>(null);
+  const [sidePanelMode, setSidePanelMode] =
+    useState<SidePanelMode>("inspector");
+  const graphAnalysis = useGraphAnalysis();
+  const pathSearch = usePathSearch();
+  const [pathSearchSource, setPathSearchSource] = useState("");
+  const [pathSearchTarget, setPathSearchTarget] = useState("");
+  const [requestedPathCount, setRequestedPathCount] = useState(5);
+  const [maximumVisitsPerState, setMaximumVisitsPerState] = useState(1);
+  const [shownSearchPathIndex, setShownSearchPathIndex] = useState<number | null>(null);
+  const [computedPathViewActive, setComputedPathViewActive] = useState(false);
+  const [focusedComputedStepKey, setFocusedComputedStepKey] = useState<string | null>(null);
+  const [terminalStatesExpanded, setTerminalStatesExpanded] =
+    useState(false);
+  const [terminalStateFilter, setTerminalStateFilter] = useState("");
+  const [terminalStatePage, setTerminalStatePage] = useState(0);
+  const [cyclicComponentsExpanded, setCyclicComponentsExpanded] =
+    useState(false);
+  const [minimumCyclicComponentSize, setMinimumCyclicComponentSize] =
+    useState(1);
+  const [cyclicComponentPage, setCyclicComponentPage] = useState(0);
+  const [selectedCyclicComponentId, setSelectedCyclicComponentId] =
+    useState<number | null>(null);
 
   function updatePathMode(mode: PathSelectionMode) {
     pathModeRef.current = mode;
@@ -137,6 +180,26 @@ function App() {
     const visibleNodes = graph.nodes.filter((node) =>
       visibleNodeIds.has(node.id)
     );
+    const parallelEdgeGroups = new Map<string, GraphEdge[]>();
+
+    for (const edge of graph.edges) {
+      const key = `${edge.source}\u0000${edge.target}`;
+      const group = parallelEdgeGroups.get(key) ?? [];
+      group.push(edge);
+      parallelEdgeGroups.set(key, group);
+    }
+
+    function getControlPointDistance(edge: GraphEdge): number {
+      const key = `${edge.source}\u0000${edge.target}`;
+      const group = parallelEdgeGroups.get(key) ?? [edge];
+
+      if (group.length <= 1 || edge.source === edge.target) {
+        return 0;
+      }
+
+      const position = group.findIndex((candidate) => candidate.id === edge.id);
+      return (position - (group.length - 1) / 2) * 56;
+    }
 
     return [
       ...visibleNodes.map((node) => ({
@@ -162,6 +225,7 @@ function App() {
           outputs_raw: edge.outputs_raw,
           lineColor:
             edge.color === "darkorange" ? "#f59e0b" : "#64748b",
+          controlPointDistance: getControlPointDistance(edge),
         },
       })),
     ];
@@ -337,10 +401,16 @@ function App() {
       return;
     }
 
+    setSelectedCyclicComponentId(null);
     const requestedStateId = selectedStateId ?? searchText.trim();
     const startStateId = graph.nodes.some((node) => node.id === requestedStateId)
       ? requestedStateId
       : null;
+
+    if (selectedCyclicComponentId !== null && startStateId) {
+      setSelectedCyclicComponentId(null);
+      showNeighborhood(startStateId, hopCount);
+    }
 
     cyRef.current?.elements().removeClass(
       "path-node path-edge path-start path-end path-next-edge path-next-node path-dimmed"
@@ -671,6 +741,151 @@ function App() {
     }
   }
 
+  function runGraphAnalysis() {
+    const graph = graphRef.current;
+
+    if (!graph) {
+      setStatus("Open a graph before running analysis");
+      return;
+    }
+
+    graphAnalysis.run({
+      nodeIds: graph.nodes.map((node) => node.id),
+      edges: graph.edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+      })),
+    });
+  }
+
+  function runPathSearch(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    const graph = graphRef.current;
+    const sourceNodeId = pathSearchSource.trim();
+    const targetNodeId = pathSearchTarget.trim();
+    if (!graph) return;
+    if (!graph.nodes.some((node) => node.id === sourceNodeId)) {
+      setStatus(`Source state ${sourceNodeId || "(empty)"} was not found`);
+      return;
+    }
+    if (!graph.nodes.some((node) => node.id === targetNodeId)) {
+      setStatus(`Target state ${targetNodeId || "(empty)"} was not found`);
+      return;
+    }
+    setShownSearchPathIndex(null);
+    pathSearch.run({
+      nodeIds: graph.nodes.map((node) => node.id),
+      edges: graph.edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+      })),
+      sourceNodeId,
+      targetNodeId,
+      requestedPathCount,
+      maximumVisitsPerState,
+      constraints: {},
+    });
+    setStatus(`Searching for up to ${requestedPathCount} paths from ${sourceNodeId} to ${targetNodeId}`);
+  }
+
+  function captureGraphViewBeforeComputedPath() {
+    const cy = cyRef.current;
+    if (!cy || graphViewBeforeComputedPathRef.current) return;
+
+    const positions: Record<string, { x: number; y: number }> = {};
+    cy.nodes().forEach((node) => {
+      positions[node.id()] = { ...node.position() };
+    });
+
+    graphViewBeforeComputedPathRef.current = {
+      nodeIds: cy.nodes().map((node) => node.id()),
+      edgeIds: cy.edges().map((edge) => edge.id()),
+      positions,
+      zoom: cy.zoom(),
+      pan: { ...cy.pan() },
+      showingAll,
+      selectedStateId,
+      searchText,
+      hopCount,
+      overviewLayout,
+    };
+  }
+
+  function returnToGraphView() {
+    const graph = graphRef.current;
+    const cy = cyRef.current;
+    const snapshot = graphViewBeforeComputedPathRef.current;
+    if (!graph || !cy || !snapshot) return;
+
+    const nodeIds = new Set(snapshot.nodeIds);
+    const edgeIds = new Set(snapshot.edgeIds);
+    const edges = graph.edges.filter((edge) => edgeIds.has(edge.id));
+
+    cy.startBatch();
+    cy.elements().remove();
+    cy.add(buildElements(graph, nodeIds, edges, showTransitionLabels));
+    cy.nodes().forEach((node) => {
+      const position = snapshot.positions[node.id()];
+      if (position) node.position(position);
+    });
+    cy.nodes().unlock();
+    cy.nodes().grabify();
+    cy.elements().removeClass(
+      "path-node path-edge path-start path-end path-next-edge path-next-node path-dimmed"
+    );
+    cy.endBatch();
+    cy.resize();
+    cy.zoom(snapshot.zoom);
+    cy.pan(snapshot.pan);
+
+    updateSelectedPath(null);
+    updatePathMode("idle");
+    setShowingAll(snapshot.showingAll);
+    setSelectedStateId(snapshot.selectedStateId);
+    setSearchText(snapshot.searchText);
+    setHopCount(snapshot.hopCount);
+    setOverviewLayout(snapshot.overviewLayout);
+    setShownSearchPathIndex(null);
+    setFocusedComputedStepKey(null);
+    setComputedPathViewActive(false);
+    graphViewBeforeComputedPathRef.current = null;
+    setStatus("Returned to the previous graph view");
+  }
+
+  function showComputedPath(path: BoundedPath, index: number) {
+    const graph = graphRef.current;
+    if (!graph) return;
+    const selected: SelectedPath = {
+      startNodeId: path.startNodeId,
+      edgeIds: path.edgeIds,
+    };
+    try {
+      resolvePath(graph, selected);
+      captureGraphViewBeforeComputedPath();
+      setSelectedCyclicComponentId(null);
+      updateSelectedPath(selected);
+      updatePathMode("idle");
+      showPathContext(selected);
+      setShownSearchPathIndex(index);
+      setFocusedComputedStepKey(null);
+      setComputedPathViewActive(true);
+      window.setTimeout(() => {
+        const cy = cyRef.current;
+        if (cy && cy.elements().nonempty()) {
+          cy.animate({
+            fit: { eles: cy.elements(), padding: 60 },
+            duration: 250,
+          });
+        }
+      }, 0);
+      setStatus(`Showing computed path ${index + 1} with ${path.edgeIds.length} transitions`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not display the computed path");
+    }
+  }
+
   async function handleFileSelected(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
@@ -678,6 +893,19 @@ function App() {
       return;
     }
 
+    graphAnalysis.reset();
+    pathSearch.reset();
+    setShownSearchPathIndex(null);
+    setFocusedComputedStepKey(null);
+    setComputedPathViewActive(false);
+    graphViewBeforeComputedPathRef.current = null;
+    setTerminalStatesExpanded(false);
+    setTerminalStateFilter("");
+    setTerminalStatePage(0);
+    setCyclicComponentsExpanded(false);
+    setMinimumCyclicComponentSize(1);
+    setCyclicComponentPage(0);
+    setSelectedCyclicComponentId(null);
     setStatus(`Loading ${file.name}...`);
     setFileName(file.name);
     setInspectorInfo(null);
@@ -700,6 +928,12 @@ function App() {
         setStatus("The selected file contains no graph nodes");
         return;
       }
+
+      const defaultPathState = graph.nodes.some((node) => node.id === "0")
+        ? "0"
+        : graph.nodes[0].id;
+      setPathSearchSource(defaultPathState);
+      setPathSearchTarget(defaultPathState);
 
       if (importedPath) {
         const resolved = resolvePath(graph, importedPath);
@@ -786,7 +1020,9 @@ function App() {
             "target-arrow-color": "data(lineColor)",
             "target-arrow-shape": "triangle",
             "arrow-scale": 0.8,
-            "curve-style": "bezier",
+            "curve-style": "unbundled-bezier",
+            "control-point-distances": "data(controlPointDistance)",
+            "control-point-weights": 0.5,
             label: "data(label)",
             "font-size": "9px",
             color: "#334155",
@@ -1039,6 +1275,204 @@ function App() {
       target: edge.target,
     }));
   })();
+
+  const filteredTerminalNodeIds = (() => {
+    const terminalNodeIds = graphAnalysis.result?.terminalNodeIds ?? [];
+    const filter = terminalStateFilter.trim().toLocaleLowerCase();
+
+    if (!filter) return terminalNodeIds;
+
+    return terminalNodeIds.filter((nodeId) =>
+      nodeId.toLocaleLowerCase().includes(filter)
+    );
+  })();
+  const terminalPageCount = Math.max(
+    1,
+    Math.ceil(filteredTerminalNodeIds.length / TERMINAL_PAGE_SIZE)
+  );
+  const safeTerminalStatePage = Math.min(
+    terminalStatePage,
+    terminalPageCount - 1
+  );
+  const visibleTerminalNodeIds = filteredTerminalNodeIds.slice(
+    safeTerminalStatePage * TERMINAL_PAGE_SIZE,
+    (safeTerminalStatePage + 1) * TERMINAL_PAGE_SIZE
+  );
+  const terminalResultStart =
+    filteredTerminalNodeIds.length === 0
+      ? 0
+      : safeTerminalStatePage * TERMINAL_PAGE_SIZE + 1;
+  const terminalResultEnd = Math.min(
+    (safeTerminalStatePage + 1) * TERMINAL_PAGE_SIZE,
+    filteredTerminalNodeIds.length
+  );
+
+  function focusTerminalState(stateId: string) {
+    setSelectedCyclicComponentId(null);
+    showNeighborhood(stateId, hopCount);
+    setStatus(`Focused terminal state ${stateId}`);
+  }
+
+  const filteredCyclicComponents =
+    graphAnalysis.result?.cyclicComponents.filter(
+      (component) => component.nodeIds.length >= minimumCyclicComponentSize
+    ) ?? [];
+  const cyclicComponentPageCount = Math.max(
+    1,
+    Math.ceil(filteredCyclicComponents.length / SCC_PAGE_SIZE)
+  );
+  const safeCyclicComponentPage = Math.min(
+    cyclicComponentPage,
+    cyclicComponentPageCount - 1
+  );
+  const visibleCyclicComponents = filteredCyclicComponents.slice(
+    safeCyclicComponentPage * SCC_PAGE_SIZE,
+    (safeCyclicComponentPage + 1) * SCC_PAGE_SIZE
+  );
+  const cyclicComponentResultStart =
+    filteredCyclicComponents.length === 0
+      ? 0
+      : safeCyclicComponentPage * SCC_PAGE_SIZE + 1;
+  const cyclicComponentResultEnd = Math.min(
+    (safeCyclicComponentPage + 1) * SCC_PAGE_SIZE,
+    filteredCyclicComponents.length
+  );
+  const selectedCyclicComponent =
+    graphAnalysis.result?.cyclicComponents.find(
+      (component) => component.id === selectedCyclicComponentId
+    ) ?? null;
+
+  function getCyclicComponentNumber(componentId: number): number {
+    const index = graphAnalysis.result?.cyclicComponents.findIndex(
+      (component) => component.id === componentId
+    ) ?? -1;
+
+    return index >= 0 ? index + 1 : 0;
+  }
+
+  function showCyclicComponent(component: StronglyConnectedComponent) {
+    const graph = graphRef.current;
+    const cy = cyRef.current;
+    if (!graph || !cy) return;
+
+    const componentNodeIds = new Set(component.nodeIds);
+    const componentEdgeIds = new Set(component.internalEdgeIds);
+    const componentEdges = graph.edges.filter(
+      (edge) =>
+        componentEdgeIds.has(edge.id) &&
+        componentNodeIds.has(edge.source) &&
+        componentNodeIds.has(edge.target)
+    );
+    const componentNumber = getCyclicComponentNumber(component.id);
+
+    updateSelectedPath(null);
+    updatePathMode("idle");
+
+    // Replace the canvas contents and then defensively remove anything that
+    // does not belong to the selected SCC. This guarantees an exact component
+    // view even if Cytoscape retained elements from a previous view.
+    replaceVisibleGraph(
+      buildElements(graph, componentNodeIds, componentEdges, showTransitionLabels),
+      overviewLayout === "hierarchical" ? "breadthfirst" : "grid"
+    );
+
+    cy.startBatch();
+    cy.nodes()
+      .filter((node) => !componentNodeIds.has(node.id()))
+      .remove();
+    cy.edges()
+      .filter((edge) => !componentEdgeIds.has(edge.id()))
+      .remove();
+    cy.elements().removeClass(
+      "path-node path-edge path-start path-end path-next-edge path-next-node path-dimmed"
+    );
+    cy.endBatch();
+    cy.resize();
+
+    setSelectedCyclicComponentId(component.id);
+    setShowingAll(false);
+    setSelectedStateId(component.nodeIds[0] ?? null);
+    if (component.nodeIds[0]) setSearchText(component.nodeIds[0]);
+    setStatus(
+      `Showing cyclic component ${componentNumber}: ${component.nodeIds.length} states and ${component.internalEdgeIds.length} internal transitions.`
+    );
+  }
+
+  function clearCyclicComponentView() {
+    setSelectedCyclicComponentId(null);
+    const graph = graphRef.current;
+    if (!graph) return;
+
+    const stateId = selectedStateId ?? graph.nodes[0]?.id;
+    if (stateId) showNeighborhood(stateId, hopCount);
+  }
+
+  function focusComputedPathEdge(edgeId: string, stepKey: string) {
+    const cy = cyRef.current;
+    const edge = cy?.getElementById(edgeId);
+    if (!cy || !edge || edge.empty()) {
+      setStatus(`Transition ${edgeId} is not visible. Show the path first.`);
+      return;
+    }
+
+    cy.elements().unselect();
+    edge.select();
+    const info = makeEdgeInspector(edge);
+    pinnedInspectorRef.current = info;
+    setPinnedInspector(info);
+    setInspectorInfo(info);
+    setFocusedComputedStepKey(stepKey);
+    cy.animate({
+      center: { eles: edge },
+      duration: 250,
+    });
+    setStatus(`Focused transition ${edge.data("transition") ?? edgeId}`);
+  }
+
+  function focusComputedPathNode(nodeId: string, stepKey: string) {
+    const cy = cyRef.current;
+    const node = cy?.getElementById(nodeId);
+    if (!cy || !node || node.empty()) {
+      setStatus(`State ${nodeId} is not visible. Show the path first.`);
+      return;
+    }
+
+    cy.elements().unselect();
+    node.select();
+    const info = makeNodeInspector(node);
+    pinnedInspectorRef.current = info;
+    setPinnedInspector(info);
+    setInspectorInfo(info);
+    setFocusedComputedStepKey(stepKey);
+    setSelectedStateId(nodeId);
+    setSearchText(nodeId);
+    cy.animate({
+      center: { eles: node },
+      duration: 250,
+    });
+    setStatus(`Focused state ${nodeId}`);
+  }
+
+  function getComputedPathSteps(path: BoundedPath) {
+    const graph = graphRef.current;
+    if (!graph) return [];
+
+    try {
+      return resolvePath(graph, {
+        startNodeId: path.startNodeId,
+        edgeIds: path.edgeIds,
+      }).edges.map((edge, index) => ({
+        index,
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        transition: edge.transition,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
   return (
     <main className="app">
       <header className="header">
@@ -1171,54 +1605,553 @@ function App() {
         </div>
 
         <aside className="inspector">
-          <div className="inspector-heading">
-            <div>
-              <span className="eyebrow">Inspector</span>
-              <h2>{visibleInspector?.title ?? "Nothing selected"}</h2>
-            </div>
-
-            {pinnedInspector && (
-              <button
-                type="button"
-                className="clear-button"
-                onClick={() => {
-                  pinnedInspectorRef.current = null;
-                  setPinnedInspector(null);
-                  setInspectorInfo(null);
-                  cyRef.current?.elements().unselect();
-                }}
-              >
-                Clear
-              </button>
-            )}
+          <div className="side-panel-tabs" role="tablist" aria-label="Side panel">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sidePanelMode === "inspector"}
+              className={sidePanelMode === "inspector" ? "active" : ""}
+              onClick={() => setSidePanelMode("inspector")}
+            >
+              Inspector
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sidePanelMode === "analysis"}
+              className={sidePanelMode === "analysis" ? "active" : ""}
+              onClick={() => setSidePanelMode("analysis")}
+            >
+              Analysis
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sidePanelMode === "paths"}
+              className={sidePanelMode === "paths" ? "active" : ""}
+              onClick={() => setSidePanelMode("paths")}
+            >
+              Paths
+            </button>
           </div>
 
-          {visibleInspector ? (
+          {sidePanelMode === "inspector" ? (
             <>
-              <div className={`inspector-type ${visibleInspector.type}`}>
-                {visibleInspector.type === "node"
-                  ? "STATE MARKING"
-                  : "TRANSITION DATA"}
+              <div className="inspector-heading">
+                <div>
+                  <span className="eyebrow">Inspector</span>
+                  <h2>{visibleInspector?.title ?? "Nothing selected"}</h2>
+                </div>
+                {pinnedInspector && (
+                  <button
+                    type="button"
+                    className="clear-button"
+                    onClick={() => {
+                      pinnedInspectorRef.current = null;
+                      setPinnedInspector(null);
+                      setInspectorInfo(null);
+                      cyRef.current?.elements().unselect();
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
-              {visibleInspector.subtitle && (
-                <p className="inspector-subtitle">{visibleInspector.subtitle}</p>
+              {visibleInspector ? (
+                <>
+                  <div className={`inspector-type ${visibleInspector.type}`}>
+                    {visibleInspector.type === "node"
+                      ? "STATE MARKING"
+                      : "TRANSITION DATA"}
+                  </div>
+                  {visibleInspector.subtitle && (
+                    <p className="inspector-subtitle">{visibleInspector.subtitle}</p>
+                  )}
+                  <JsonViewer
+                    key={`${visibleInspector.type}-${visibleInspector.title}`}
+                    value={visibleInspector.data}
+                    label={`${visibleInspector.title} ${visibleInspector.subtitle ?? "data"}`}
+                  />
+                  <p className="inspector-tip">
+                    {pinnedInspector
+                      ? "This item is pinned. Select Clear to resume hover inspection."
+                      : "Click a state or transition to pin this information."}
+                  </p>
+                </>
+              ) : (
+                <div className="inspector-empty">
+                  <p>Hover over a state or transition to inspect its data.</p>
+                  <p>Click an item to keep its data visible.</p>
+                </div>
               )}
-              <JsonViewer
-                key={`${visibleInspector.type}-${visibleInspector.title}`}
-                value={visibleInspector.data}
-                label={`${visibleInspector.title} ${visibleInspector.subtitle ?? "data"}`}
-              />
-              <p className="inspector-tip">
-                {pinnedInspector
-                  ? "This item is pinned. Select Clear to resume hover inspection."
-                  : "Click a state or transition to pin this information."}
-              </p>
             </>
+          ) : sidePanelMode === "analysis" ? (
+            <section className="analysis-panel" role="tabpanel">
+              <div className="analysis-heading">
+                <span className="eyebrow">Graph analysis</span>
+                <h2>Terminal states and cycles</h2>
+              </div>
+
+              {!graphLoaded ? (
+                <div className="analysis-message">
+                  <p>Open a graph before running analysis.</p>
+                </div>
+              ) : graphAnalysis.status === "not-run" ? (
+                <div className="analysis-message">
+                  <p>Analysis has not been run for this graph.</p>
+                  <dl className="analysis-input-summary">
+                    <div>
+                      <dt>States</dt>
+                      <dd>{graphRef.current?.nodes.length ?? 0}</dd>
+                    </div>
+                    <div>
+                      <dt>Transitions</dt>
+                      <dd>{graphRef.current?.edges.length ?? 0}</dd>
+                    </div>
+                  </dl>
+                  <p className="analysis-note">
+                    Terminal states have no outgoing transitions. Whether a terminal
+                    state represents a deadlock or successful completion depends on
+                    the model.
+                  </p>
+                  <button
+                    type="button"
+                    className="primary-button analysis-action"
+                    onClick={runGraphAnalysis}
+                  >
+                    Run analysis
+                  </button>
+                </div>
+              ) : graphAnalysis.status === "running" ? (
+                <div className="analysis-message" aria-live="polite">
+                  <p>Analyzing graph...</p>
+                  <div className="analysis-progress" aria-hidden="true" />
+                  <button
+                    type="button"
+                    className="analysis-action"
+                    onClick={graphAnalysis.cancel}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : graphAnalysis.status === "completed" && graphAnalysis.result ? (
+                <div className="analysis-results" aria-live="polite">
+                  <dl className="analysis-summary">
+                    <div>
+                      <dt>Terminal states</dt>
+                      <dd>{graphAnalysis.result.terminalNodeIds.length}</dd>
+                    </div>
+                    <div>
+                      <dt>Cyclic components</dt>
+                      <dd>{graphAnalysis.result.cyclicComponents.length}</dd>
+                    </div>
+                    <div>
+                      <dt>States in cyclic components</dt>
+                      <dd>{graphAnalysis.result.statesInCyclicComponents}</dd>
+                    </div>
+                    <div>
+                      <dt>Largest cyclic component</dt>
+                      <dd>{graphAnalysis.result.largestCyclicComponentSize}</dd>
+                    </div>
+                  </dl>
+                  <details
+                    className="analysis-result-group"
+                    open={terminalStatesExpanded}
+                    onToggle={(event) =>
+                      setTerminalStatesExpanded(event.currentTarget.open)
+                    }
+                  >
+                    <summary>
+                      Terminal states ({graphAnalysis.result.terminalNodeIds.length})
+                    </summary>
+                    <div className="analysis-result-content">
+                      <label
+                        className="analysis-filter-label"
+                        htmlFor="terminal-state-filter"
+                      >
+                        Filter by state ID
+                      </label>
+                      <input
+                        id="terminal-state-filter"
+                        className="analysis-filter-input"
+                        value={terminalStateFilter}
+                        onChange={(event) => {
+                          setTerminalStateFilter(event.target.value);
+                          setTerminalStatePage(0);
+                        }}
+                        placeholder="Enter all or part of an ID"
+                      />
+                      {filteredTerminalNodeIds.length === 0 ? (
+                        <p className="analysis-note">
+                          No terminal states match this filter.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="analysis-result-range">
+                            Showing {terminalResultStart}-{terminalResultEnd} of{" "}
+                            {filteredTerminalNodeIds.length}
+                          </p>
+                          <div className="terminal-state-list">
+                            {visibleTerminalNodeIds.map((nodeId) => (
+                              <button
+                                key={nodeId}
+                                type="button"
+                                onClick={() => focusTerminalState(nodeId)}
+                              >
+                                {nodeId}
+                              </button>
+                            ))}
+                          </div>
+                          {terminalPageCount > 1 && (
+                            <div className="analysis-pagination">
+                              <button
+                                type="button"
+                                disabled={safeTerminalStatePage === 0}
+                                onClick={() =>
+                                  setTerminalStatePage((page) =>
+                                    Math.max(0, page - 1)
+                                  )
+                                }
+                              >
+                                Previous
+                              </button>
+                              <span>
+                                Page {safeTerminalStatePage + 1} of {terminalPageCount}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={safeTerminalStatePage >= terminalPageCount - 1}
+                                onClick={() =>
+                                  setTerminalStatePage((page) =>
+                                    Math.min(terminalPageCount - 1, page + 1)
+                                  )
+                                }
+                              >
+                                Next
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </details>
+                  <details
+                    className="analysis-result-group"
+                    open={cyclicComponentsExpanded}
+                    onToggle={(event) =>
+                      setCyclicComponentsExpanded(event.currentTarget.open)
+                    }
+                  >
+                    <summary>
+                      Cyclic components ({graphAnalysis.result.cyclicComponents.length})
+                    </summary>
+                    <div className="analysis-result-content">
+                      <label
+                        className="analysis-filter-label"
+                        htmlFor="cyclic-component-minimum-size"
+                      >
+                        Minimum component size
+                      </label>
+                      <input
+                        id="cyclic-component-minimum-size"
+                        className="analysis-filter-input"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={minimumCyclicComponentSize}
+                        onChange={(event) => {
+                          const value = Number.parseInt(event.target.value, 10);
+                          setMinimumCyclicComponentSize(
+                            Number.isFinite(value) ? Math.max(1, value) : 1
+                          );
+                          setCyclicComponentPage(0);
+                        }}
+                      />
+                      {filteredCyclicComponents.length === 0 ? (
+                        <p className="analysis-note">
+                          No cyclic components match this minimum size.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="analysis-result-range">
+                            Showing {cyclicComponentResultStart}-
+                            {cyclicComponentResultEnd} of{" "}
+                            {filteredCyclicComponents.length}
+                          </p>
+                          <div className="cyclic-component-list">
+                            {visibleCyclicComponents.map((component) => (
+                              <button
+                                key={component.id}
+                                type="button"
+                                className={
+                                  selectedCyclicComponentId === component.id
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() => showCyclicComponent(component)}
+                              >
+                                <span>Cyclic component {getCyclicComponentNumber(component.id)}</span>
+                                <small>
+                                  {component.nodeIds.length} states ·{" "}
+                                  {component.internalEdgeIds.length} transitions
+                                </small>
+                              </button>
+                            ))}
+                          </div>
+                          {cyclicComponentPageCount > 1 && (
+                            <div className="analysis-pagination">
+                              <button
+                                type="button"
+                                disabled={safeCyclicComponentPage === 0}
+                                onClick={() =>
+                                  setCyclicComponentPage((page) =>
+                                    Math.max(0, page - 1)
+                                  )
+                                }
+                              >
+                                Previous
+                              </button>
+                              <span>
+                                Page {safeCyclicComponentPage + 1} of{" "}
+                                {cyclicComponentPageCount}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={
+                                  safeCyclicComponentPage >=
+                                  cyclicComponentPageCount - 1
+                                }
+                                onClick={() =>
+                                  setCyclicComponentPage((page) =>
+                                    Math.min(cyclicComponentPageCount - 1, page + 1)
+                                  )
+                                }
+                              >
+                                Next
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {selectedCyclicComponent && (
+                        <div className="selected-component-details">
+                          <div>
+                            <strong>
+                              Cyclic component {getCyclicComponentNumber(selectedCyclicComponent.id)}
+                            </strong>
+                            <span>
+                              {selectedCyclicComponent.nodeIds.length} states and{" "}
+                              {selectedCyclicComponent.internalEdgeIds.length} internal
+                              transitions
+                            </span>
+                          </div>
+                          <button type="button" onClick={clearCyclicComponentView}>
+                            Clear component view
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                  <p className="analysis-note">
+                    Terminal-state navigation uses the current neighborhood depth.
+                    Selecting a cyclic component shows only its states and internal
+                    transitions.
+                  </p>
+                  <button
+                    type="button"
+                    className="analysis-action"
+                    onClick={runGraphAnalysis}
+                  >
+                    Run again
+                  </button>
+                </div>
+              ) : graphAnalysis.status === "failed" ? (
+                <div className="analysis-message" role="alert">
+                  <p>Analysis could not be completed.</p>
+                  <p className="analysis-error">
+                    {graphAnalysis.error ?? "An unknown error occurred."}
+                  </p>
+                  <button
+                    type="button"
+                    className="analysis-action"
+                    onClick={runGraphAnalysis}
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : (
+                <div className="analysis-message">
+                  <p>Analysis was cancelled.</p>
+                  <button
+                    type="button"
+                    className="analysis-action"
+                    onClick={runGraphAnalysis}
+                  >
+                    Run analysis
+                  </button>
+                </div>
+              )}
+            </section>
           ) : (
-            <div className="inspector-empty">
-              <p>Hover over a state or transition to inspect its data.</p>
-              <p>Click an item to keep its data visible.</p>
-            </div>
+            <section className="path-search-panel" role="tabpanel">
+              <div className="analysis-heading path-search-heading">
+                <div>
+                  <span className="eyebrow">Alternative paths</span>
+                  <h2>Bounded shortest paths</h2>
+                </div>
+                {computedPathViewActive && (
+                  <button
+                    type="button"
+                    className="clear-button"
+                    onClick={returnToGraphView}
+                  >
+                    Return to graph view
+                  </button>
+                )}
+              </div>
+              {!graphLoaded ? (
+                <div className="analysis-message"><p>Open a graph before searching for paths.</p></div>
+              ) : (
+                <>
+                  <form className="path-search-form" onSubmit={runPathSearch}>
+                    <label htmlFor="path-search-source">Source state</label>
+                    <input id="path-search-source" value={pathSearchSource} onChange={(event) => setPathSearchSource(event.target.value)} disabled={pathSearch.status === "running"} />
+                    <label htmlFor="path-search-target">Target state</label>
+                    <input id="path-search-target" value={pathSearchTarget} onChange={(event) => setPathSearchTarget(event.target.value)} disabled={pathSearch.status === "running"} />
+                    <div className="path-search-number-row">
+                      <div>
+                        <label htmlFor="path-search-count">Number of paths</label>
+                        <input id="path-search-count" type="number" min="1" max="100" step="1" value={requestedPathCount} onChange={(event) => setRequestedPathCount(Math.max(1, Number.parseInt(event.target.value, 10) || 1))} disabled={pathSearch.status === "running"} />
+                      </div>
+                      <div>
+                        <label htmlFor="path-search-visits">Visits per state</label>
+                        <input id="path-search-visits" type="number" min="1" max="10" step="1" value={maximumVisitsPerState} onChange={(event) => setMaximumVisitsPerState(Math.max(1, Number.parseInt(event.target.value, 10) || 1))} disabled={pathSearch.status === "running"} />
+                      </div>
+                    </div>
+                    <p className="analysis-note">A visit limit of 1 produces loopless paths. Higher values allow bounded revisits. Paths are unique by ordered edge IDs.</p>
+                    {pathSearch.status === "running" ? (
+                      <button type="button" onClick={pathSearch.cancel}>Cancel</button>
+                    ) : (
+                      <button type="submit" className="primary-button">Find paths</button>
+                    )}
+                  </form>
+                  {pathSearch.status === "running" && <div className="path-search-status" aria-live="polite"><p>Searching for paths...</p><div className="analysis-progress" aria-hidden="true" /></div>}
+                  {pathSearch.status === "cancelled" && <p className="path-search-status">Path search was cancelled.</p>}
+                  {pathSearch.status === "failed" && <div className="analysis-error" role="alert">{pathSearch.error ?? "Path search failed."}</div>}
+                  {pathSearch.status === "completed" && pathSearch.result && (
+                    <div className="path-search-results" aria-live="polite">
+                      <div className="path-search-result-heading">
+                        <strong>{pathSearch.result.paths.length} path{pathSearch.result.paths.length === 1 ? "" : "s"} found</strong>
+                        <span>{pathSearch.result.expandedCandidateCount} candidates expanded</span>
+                      </div>
+                      {pathSearch.result.paths.length === 0 ? (
+                        <p className="analysis-note">No path satisfies the selected visit bound.</p>
+                      ) : (
+                        <div className="computed-path-list">
+                          {pathSearch.result.paths.map((path, index) => {
+                            const steps = getComputedPathSteps(path);
+
+                            return (
+                              <article
+                                key={`${index}-${path.edgeIds.join("|")}`}
+                                className={
+                                  shownSearchPathIndex === index
+                                    ? "computed-path-card active"
+                                    : "computed-path-card"
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  className="computed-path-show"
+                                  onClick={() => showComputedPath(path, index)}
+                                >
+                                  <span>Path {index + 1}</span>
+                                  <small>
+                                    {path.edgeIds.length} transition
+                                    {path.edgeIds.length === 1 ? "" : "s"}
+                                  </small>
+                                </button>
+                                <details className="computed-path-details">
+                                  <summary>Show transition details</summary>
+                                  {steps.length === 0 ? (
+                                    <p>Zero-transition path at state {path.startNodeId}.</p>
+                                  ) : (
+                                    <ol>
+                                      {steps.map((step) => (
+                                        <li
+                                          key={`${step.index}-${step.id}`}
+                                          className={
+                                            focusedComputedStepKey === `${index}-${step.index}-${step.id}`
+                                              ? "active"
+                                              : ""
+                                          }
+                                        >
+                                          <button
+                                            type="button"
+                                            className="computed-step-transition"
+                                            onClick={() =>
+                                              focusComputedPathEdge(
+                                                step.id,
+                                                `${index}-${step.index}-${step.id}`
+                                              )
+                                            }
+                                          >
+                                            {step.transition}
+                                          </button>
+                                          <span className="computed-step-route">
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                focusComputedPathNode(
+                                                  step.source,
+                                                  `${index}-${step.index}-${step.id}`
+                                                )
+                                              }
+                                            >
+                                              {step.source}
+                                            </button>
+                                            <span aria-hidden="true">→</span>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                focusComputedPathNode(
+                                                  step.target,
+                                                  `${index}-${step.index}-${step.id}`
+                                                )
+                                              }
+                                            >
+                                              {step.target}
+                                            </button>
+                                          </span>
+                                          <button
+                                            type="button"
+                                            className="computed-step-edge-id"
+                                            onClick={() =>
+                                              focusComputedPathEdge(
+                                                step.id,
+                                                `${index}-${step.index}-${step.id}`
+                                              )
+                                            }
+                                          >
+                                            {step.id}
+                                          </button>
+                                        </li>
+                                      ))}
+                                    </ol>
+                                  )}
+                                </details>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {pathSearch.result.resourceLimitReached && <p className="path-search-warning">Search stopped at the internal resource limit. Additional valid paths may exist.</p>}
+                      {pathSearch.result.exhausted && pathSearch.result.paths.length < requestedPathCount && <p className="analysis-note">The bounded search space was exhausted. No additional paths exist for this visit limit.</p>}
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
           )}
         </aside>
       </section>

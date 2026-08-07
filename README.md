@@ -80,6 +80,48 @@ LTSVisualizer does not import PlantUML files. PlantUML remains available only as
 - Pin inspector content while continuing to explore the graph.
 - Clear pinned inspector content without clearing a selected path.
 
+### Graph analysis
+
+- Open the **Analysis** tab without affecting the Inspector.
+- Run analysis explicitly with **Run analysis**. Analysis is never started automatically when a graph is loaded.
+- Detect terminal states, defined as states with no outgoing transitions.
+- Compute strongly connected components using an iterative graph traversal that avoids recursive call-stack limits.
+- Classify an SCC as cyclic when it contains more than one state or when a singleton state has a self-loop.
+- Run graph analysis in an inline Web Worker so the browser interface remains responsive.
+- Cancel an analysis while it is running.
+- Ignore stale worker results after cancellation, reruns, or loading another graph.
+- Filter terminal states by state ID and browse large result sets in pages of 100.
+- Select a terminal state to open its current neighborhood view.
+- Filter cyclic components by minimum component size and browse results in pages of 100.
+- Select one cyclic component to display only its member states and internal transitions.
+- Clear a component-only view and return to normal neighborhood exploration.
+- Use the same analysis functionality in the hosted application and the offline `file:///` build.
+
+A terminal state is not automatically an error. Whether a terminal state represents successful completion or an unintended deadlock depends on the model. LTSVisualizer reports terminal states and does not attempt to classify their business meaning.
+
+Analysis results are held in browser memory for the currently loaded graph. They are reset when another graph is opened and are not added to graph or selected-path exports.
+
+### Bounded alternative path search
+
+- Open the **Paths** tab to compute up to a user-defined number of shortest paths between two states.
+- Set **Visits per state** to `1` for loopless paths or to a higher value to allow bounded revisits.
+- Support equal source and target states. The zero-transition path is returned first, and returning cycles may follow when the visit bound permits them.
+- Treat paths as unique by ordered edge-ID sequence, so parallel transitions remain distinct even when they connect the same states.
+- Order results by increasing transition count, with deterministic ordering for equal-length alternatives.
+- Use reverse shortest-distance guidance from the target to prioritize reachable alternatives and prune states that cannot reach the target.
+- Run searches in an inline Web Worker with cancellation, stale-result protection, errors, reruns, and reset when another graph is loaded.
+- Stop safely at internal candidate safeguards and report partial results without claiming that no additional paths exist.
+- Select a result to reuse existing path visualization and JSON and PlantUML exports.
+- Separate parallel transitions visually and expose transition names, source and target states, and exact edge IDs.
+- Select transition or state details to center and select the corresponding graph element without leaving the **Paths** tab.
+- Pin clicked transition or state data for later viewing in Inspector without switching tabs automatically.
+- Preserve search results while switching among Inspector, Analysis, and Paths.
+- Fit the viewport around a computed path without changing node positions.
+- Use **Return to graph view** to restore visible elements, positions, zoom, pan, focus, neighborhood depth, and layout while retaining results.
+- Use the same functionality in hosted and offline `file:///` builds.
+
+Path-search results are kept in browser memory for the currently loaded graph and are reset when another graph is opened.
+
 ### Manual path selection
 
 - Start a path from the currently focused state.
@@ -105,6 +147,19 @@ The repository includes:
 
 - `sample-data/example.json`: a small graph for quick checks.
 - `sample-data/rg_imaging.json`: a larger, realistic reachability graph.
+- `sample-data/synthetic.json`: a synthetic graph for terminal-state and strongly connected component analysis.
+
+The expected analysis for `synthetic.json` is:
+
+```text
+States:                         32
+Transitions:                    41
+Terminal states:                 4
+Cyclic components:               5
+States in cyclic components:    19
+Largest cyclic component:        8
+Cyclic component sizes: 8, 5, 3, 2, 1
+```
 
 ## JSON input format
 
@@ -337,6 +392,34 @@ Graph data remains in the browser and is not uploaded to a server.
 
 For very large graphs, neighborhood exploration is recommended instead of displaying every state and transition simultaneously.
 
+### Analyze a graph
+
+1. Open the **Analysis** tab in the right-hand panel.
+2. Select **Run analysis**. Loading a graph or opening the tab does not start computation.
+3. Select **Cancel** if the analysis should be stopped.
+4. Review the terminal-state and cyclic-component summary.
+5. Expand **Terminal states** to filter and select a terminal state.
+6. Expand **Cyclic components** to filter by minimum size and select a component.
+7. Select **Clear component view** to return to normal neighborhood exploration.
+8. Select **Run again** to recompute the results for the current graph.
+
+For large graphs, worker execution prevents the analysis algorithm from blocking the main browser interface. Preparing and transferring graph topology still consumes browser memory, so analysis remains an explicit user action.
+
+### Find alternative paths
+
+1. Open the **Paths** tab.
+2. Enter source and target state IDs.
+3. Choose the requested number of paths.
+4. Set **Visits per state** to `1` for loopless paths or higher for bounded revisits.
+5. Select **Find paths**. During a running search, the action changes to **Cancel**.
+6. Select a result to display it without relaying out its states.
+7. Expand **Show transition details** to compare transition names, state pairs, and edge IDs.
+8. Select a transition name or edge ID to center and select its edge, or select a state ID to center and select its state.
+9. Use **Export .puml** or **Export .json** to export the displayed computed path.
+10. Select **Return to graph view** to restore the prior graph context without clearing results.
+
+Paths are ordered by transition count and are unique by ordered edge IDs. If source and target are equal, the zero-transition path is valid.
+
 ### Select a path
 
 1. Search for or focus the desired starting state.
@@ -438,6 +521,10 @@ React and TypeScript application
         |-- Cytoscape.js visualization
         |-- Search and neighborhood exploration
         |-- Structured semantic-data inspection
+        |-- On-demand terminal-state and SCC analysis
+        |   `-- Inline Web Worker with cancellation
+        |-- Bounded alternative path search
+        |   `-- Reverse-distance-guided inline Web Worker with cancellation
         |-- Manual path selection
         |-- Complete-graph JSON export
         |-- Selected-path JSON export
@@ -480,6 +567,7 @@ LTSVisualizer/
 |   |-- src/
 |   |   |-- components/
 |   |   |-- graph/
+|   |   |-- workers/
 |   |   |-- App.css
 |   |   |-- App.tsx
 |   |   |-- index.css
@@ -491,7 +579,8 @@ LTSVisualizer/
 |   `-- vite.offline.config.ts
 |-- sample-data/
 |   |-- example.json
-|   `-- rg_imaging.json
+|   |-- rg_imaging.json
+|   `-- synthetic.json
 |-- CHANGELOG.md
 |-- CONTRIBUTING.md
 |-- LICENSE
@@ -543,7 +632,7 @@ npm run build
 npm run build:offline
 ```
 
-The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, path selection, loops, repeated states, parallel edges, selected-path export, semantic data, and PlantUML path export.
+The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, manual and computed path selection, loops, repeated states, bounded revisits, source-equals-target paths, self-loops, parallel edges, deterministic shortest-first ordering, reverse-distance pruning, resource safeguards, selected-path export, semantic data, PlantUML path export, terminal-state detection, iterative SCC computation, large synthetic graph topologies, and worker-controller lifecycle behavior.
 
 ## Build targets
 
@@ -633,30 +722,28 @@ The tag triggers the offline HTML release workflow and publishes `LTSVisualizer.
 - PlantUML is an export-only format.
 - Extremely large full-graph views can be visually dense even when rendering remains responsive.
 - Global force-directed layouts are intentionally avoided because they can be computationally expensive in the browser.
+- Terminal states are reported topologically and are not classified as successful completions or definite deadlocks.
+- Graph analysis uses a worker and is user-triggered, but very large graphs still require additional browser memory for topology transfer and analysis results.
+- Bounded path search is user-triggered and uses a worker, but highly connected graphs can still reach internal candidate safeguards before every requested alternative is found. Partial results are reported and additional valid paths may exist.
+- Cancelling path search terminates its worker immediately; partial paths found before cancellation are not retained.
 - The offline release depends on browser support for local `file:///` applications and file selection.
 - GitHub Pages availability depends on successful processing by GitHub's deployment service.
 
 ## Roadmap
 
-Planned priorities:
+Planned priority:
 
-1. Refactor graph loading, shared graph types, Cytoscape integration, and visualization logic.
-2. Experiment with constrained graph search.
+1. Extend bounded alternative path search with transition constraints.
 
-The constrained graph-search experiment may support:
+The future constrained-search extension may support:
 
-- Start and optional target states
 - Required transitions in order
+- Required transitions matched by transition name and specific or partial structured input and output data
 - Forbidden transitions
-- Maximum path length
-- Shortest matching paths
-- Loops and parallel transitions
-- Reuse of the existing path visualization and export functionality
+- Additional constraint combinations while preserving bounded revisits, parallel-edge identity, shortest-first results, and existing visualization and export functionality
 
 Additional potential improvements include:
 
-- Deadlock-state detection
-- Strongly connected component analysis
 - State-to-state marking differences
 - Token-journey visualization
 - Transition-frequency analytics

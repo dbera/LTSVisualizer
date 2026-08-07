@@ -87,6 +87,7 @@ sample-data/*.json
 # Keep repository sample graphs
 !sample-data/example.json
 !sample-data/rg_imaging.json
+!sample-data/synthetic.json
 
 
 # PyInstaller output, to be enabled later
