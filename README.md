@@ -1,6 +1,6 @@
 # LTSVisualizer
 
-LTSVisualizer is a browser-based application for exploring large labelled transition systems and reachability graphs stored as JSON.
+LTSVisualizer is a browser-based application for exploring, analyzing, and searching large labelled transition systems and reachability graphs stored as JSON. It supports ordinary bounded path search and data-aware constrained path discovery using Declare templates.
 
 It was created primarily for reachability graphs generated from Colored Petri Nets, where:
 
@@ -121,6 +121,62 @@ Analysis results are held in browser memory for the currently loaded graph. They
 - Use the same functionality in hosted and offline `file:///` builds.
 
 Path-search results are kept in browser memory for the currently loaded graph and are reset when another graph is opened.
+
+### Data-aware Declare-constrained path search
+
+- Add one or more Declare constraints to bounded path search.
+- Enable or disable individual constraints without deleting their configuration.
+- Match activation, target, and where applicable between events by transition name and structured transition data.
+- Build transition pickers and data-field choices from the currently loaded graph.
+- Evaluate transition `inputs` and `outputs` during search rather than only matching transition labels.
+- Combine multiple conditions within one predicate using AND semantics.
+- Use string, number, boolean, and `null` comparison values.
+- Use `exists` and `does-not-exist` without supplying a comparison value.
+- Traverse nested objects, arrays of objects, and arrays of primitive values.
+- Configure every array level independently as an existential item match (`[*]`) or a fixed zero-based index such as `[2]`.
+- Combine existential and indexed traversal at arbitrary multidimensional depth.
+- Search either toward a required target state or for a constraint-satisfying path without a fixed target.
+- Run constrained searches in the existing path-search worker with cancellation, stale-result protection, bounded revisits, deterministic shortest-first results, and parallel-edge identity.
+- Use the same constrained-search functionality in hosted and offline `file:///` builds.
+
+All enabled constraints must be satisfied by a returned path. Disabling a constraint excludes it from evaluation but keeps it available for later reuse.
+
+#### Supported Declare templates
+
+The constraint builder groups templates by purpose:
+
+- **Cardinality:** At least N, At most N, Exactly N, Exactly N consecutively
+- **Position:** Init, End
+- **Choice:** Choice, Exclusive choice
+- **Existence:** Responded existence, Not responded existence, Coexistence, Not coexistence
+- **Future:** Response, Not response, Chain response, Not chain response, Alternate response, Not alternate response
+- **Past:** Precedence, Not precedence, Chain precedence, Not chain precedence, Alternate precedence, Not alternate precedence
+- **Bidirectional:** Succession, Not succession, Chain succession, Not chain succession, Alternate succession, Not alternate succession
+
+The selected template determines which predicate roles are required. Cardinality templates require a non-negative count. Alternate templates also expose a between predicate. Templates that support correlation can relate data captured by an activation to data on a target.
+
+#### Transition-data conditions
+
+A condition starts at either `inputs` or `outputs` and follows a path through the structured transition data. The available fields and observed scalar types are derived from occurrences of the selected transition in the loaded graph.
+
+Examples:
+
+```text
+inputs.request.priority
+outputs.result.status
+outputs.orders[*].items[2].status
+outputs.matrix[1][3].value
+outputs.tensor[*].rows[2].cells[*].enabled
+```
+
+Array access is configured per level:
+
+- `[*]` means that at least one item at that level must satisfy the remaining condition.
+- `[n]` selects the item at zero-based index `n`.
+
+For example, `outputs.tensor[*].rows[2].cells[*].enabled` matches any tensor item whose third row contains a cell with a matching `enabled` value.
+
+Existence operators test whether the configured path can be resolved. Other operators compare the resolved value with the typed value configured in the editor.
 
 ### Manual path selection
 
@@ -368,6 +424,23 @@ When a selected-path JSON file is reopened, LTSVisualizer loads its graph subset
 
 ## Using the dashboard
 
+### Use the side panel
+
+The right-hand side panel contains the **Inspector**, **Analysis**, and **Paths** tabs.
+
+- Drag the vertical separator to resize the panel.
+- Use the collapse control to hide or restore the panel.
+- The selected width and collapsed state are saved in browser local storage.
+- Collapsing the panel does not discard path-search results or condition-editor state.
+
+When the separator has keyboard focus:
+
+- `ArrowLeft` widens the panel by 16 pixels.
+- `ArrowRight` narrows the panel by 16 pixels.
+- Hold `Shift` with an arrow key to resize by 50 pixels.
+- `Home` selects the minimum width.
+- `End` selects the maximum allowed by the current viewport.
+
 ### Open a graph
 
 1. Open the online application or `LTSVisualizer.html`.
@@ -419,6 +492,27 @@ For large graphs, worker execution prevents the analysis algorithm from blocking
 10. Select **Return to graph view** to restore the prior graph context without clearing results.
 
 Paths are ordered by transition count and are unique by ordered edge IDs. If source and target are equal, the zero-transition path is valid.
+
+### Find Declare-constrained paths
+
+1. Open the **Paths** tab.
+2. Enter the source state ID.
+3. Enter a target state ID when the path must end at a particular state, or leave the target empty to search for a constraint-satisfying path without a fixed destination.
+4. Choose the requested number of paths and set **Visits per state**.
+5. In the Declare constraints section, select **Add constraint**.
+6. Choose a Declare template and configure its required activation, target, and where applicable between transitions.
+7. For a transition-data predicate, select **Add condition**, choose an input or output field, configure each array-access level, select an operator, and provide a typed value when required.
+8. Add further conditions or constraints as needed. Conditions within a predicate and enabled constraints in the search are combined conjunctively.
+9. Select **Find paths**. Invalid or incomplete constraints are reported before search starts.
+10. Select a result to visualize, inspect, or export it using the normal computed-path controls.
+
+Use the enable control to temporarily exclude a constraint while preserving its configuration. Changing a constraint invalidates earlier search results because those results were computed under a different search specification.
+
+#### Interpreting optional-target results
+
+With a target state, a result must reach that state and satisfy every enabled constraint when the path is completed.
+
+Without a target state, the search may return a path as soon as the enabled monitors consider the path complete and accepting. This is useful when the required behavior matters more than a particular destination state.
 
 ### Select a path
 
@@ -632,7 +726,7 @@ npm run build
 npm run build:offline
 ```
 
-The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, manual and computed path selection, loops, repeated states, bounded revisits, source-equals-target paths, self-loops, parallel edges, deterministic shortest-first ordering, reverse-distance pruning, resource safeguards, selected-path export, semantic data, PlantUML path export, terminal-state detection, iterative SCC computation, large synthetic graph topologies, and worker-controller lifecycle behavior.
+The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, manual and computed path selection, loops, repeated states, bounded revisits, source-equals-target paths, self-loops, parallel edges, deterministic shortest-first ordering, reverse-distance pruning, resource safeguards, Declare constraint validation and monitor semantics, transition-data predicates and correlation, optional-target constrained search, nested and multidimensional array conditions, typed condition values, side-panel state, selected-path export, semantic data, PlantUML path export, terminal-state detection, iterative SCC computation, large synthetic graph topologies, and worker-controller lifecycle behavior.
 
 ## Build targets
 
@@ -726,27 +820,23 @@ The tag triggers the offline HTML release workflow and publishes `LTSVisualizer.
 - Graph analysis uses a worker and is user-triggered, but very large graphs still require additional browser memory for topology transfer and analysis results.
 - Bounded path search is user-triggered and uses a worker, but highly connected graphs can still reach internal candidate safeguards before every requested alternative is found. Partial results are reported and additional valid paths may exist.
 - Cancelling path search terminates its worker immediately; partial paths found before cancellation are not retained.
+- Declare constraints are evaluated during bounded path search; configured visit and result limits still determine the explored search space.
+- Multiple conditions within a predicate and multiple enabled constraints are currently combined conjunctively.
+- Transition-data fields are inferred from data present on occurrences of the selected transition. A field absent from the loaded graph cannot be selected through the graph-aware field picker.
 - The offline release depends on browser support for local `file:///` applications and file selection.
 - GitHub Pages availability depends on successful processing by GitHub's deployment service.
 
 ## Roadmap
 
-Planned priority:
+Potential future improvements include:
 
-1. Extend bounded alternative path search with transition constraints.
-
-The future constrained-search extension may support:
-
-- Required transitions in order
-- Required transitions matched by transition name and specific or partial structured input and output data
-- Forbidden transitions
-- Additional constraint combinations while preserving bounded revisits, parallel-edge identity, shortest-first results, and existing visualization and export functionality
-
-Additional potential improvements include:
-
-- State-to-state marking differences
-- Token-journey visualization
-- Transition-frequency analytics
+- Additional constraint combinations and richer Boolean grouping
+- Import and export of reusable constraint configurations
+- Further correlation editing for captured activation data
+- Additional path-search diagnostics and progress reporting
+- Performance tuning for highly connected constrained-search spaces
+- More graph layouts and large-graph navigation aids
+- Additional export formats
 
 ## Contributing
 

@@ -4,7 +4,9 @@ All notable changes to LTSVisualizer are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/dbera/LTSVisualizer/compare/v0.4.0...HEAD)
+## [Unreleased](https://github.com/dbera/LTSVisualizer/compare/v0.5.0...HEAD)
+
+## [0.5.0](https://github.com/dbera/LTSVisualizer/compare/v0.4.0...v0.5.0) - 2026-08-08
 
 ### Added
 
@@ -34,6 +36,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Added clickable result details that center and select graph edges or states while keeping the Paths tab open.
 - Added graph-view snapshots and **Return to graph view** restoration for visible elements, positions, zoom, pan, focus, neighborhood depth, and layout.
 - Added separate curved rendering for parallel transitions.
+- Added data-aware Declare constraints to bounded path discovery.
+- Added a Declare constraint model with validation for required predicate roles, counts, correlations, and enabled state.
+- Added executable predicate and monitor infrastructure for evaluating constraints incrementally during path search.
+- Added cardinality templates: **At least N**, **At most N**, **Exactly N**, and **Exactly N consecutively**.
+- Added position and choice templates: **Init**, **End**, **Choice**, and **Exclusive choice**.
+- Added existence templates: **Responded existence**, **Not responded existence**, **Coexistence**, and **Not coexistence**.
+- Added future templates: **Response**, **Not response**, **Chain response**, **Not chain response**, **Alternate response**, and **Not alternate response**.
+- Added past templates: **Precedence**, **Not precedence**, **Chain precedence**, **Not chain precedence**, **Alternate precedence**, and **Not alternate precedence**.
+- Added bidirectional templates: **Succession**, **Not succession**, **Chain succession**, **Not chain succession**, **Alternate succession**, and **Not alternate succession**.
+- Added transition-data predicates for structured transition `inputs` and `outputs`.
+- Added transition-data correlation support using values captured from activation events.
+- Added graph-aware transition selection based on transitions present in the loaded graph.
+- Added a transition-data field catalogue derived from observed input and output structures for each transition.
+- Added a searchable graph-aware data-field picker with observed scalar-type information.
+- Added a typed transition-condition editor for string, number, boolean, and `null` values.
+- Added `exists` and `does-not-exist` condition operators that do not require comparison values.
+- Added multiple data conditions per predicate with AND semantics.
+- Added nested-object conditions, arrays of objects, and arrays of primitive values.
+- Added arbitrary multidimensional-array traversal with independent access configuration at every array level.
+- Added existential array-item matching using `[*]` and fixed zero-based array indexing using `[n]`.
+- Added mixed existential and indexed traversal within the same multidimensional data path.
+- Added optional-target constrained path discovery, allowing accepting paths to be returned without a fixed destination state.
+- Added a graph-aware Declare constraint builder in the **Paths** tab.
+- Added validation errors for incomplete or unsupported constraint configurations before search starts.
+- Added a resizable and collapsible right-hand side panel.
+- Added persistence of side-panel width and collapsed state in browser local storage.
+- Added keyboard-accessible side-panel resizing with arrow keys, accelerated Shift increments, Home, and End.
+- Added focused regression coverage for Declare models, predicates, correlations, monitor families, constrained path search, optional-target semantics, transition-data catalogues, multidimensional conditions, typed values, and side-panel state.
 
 ### Changed
 
@@ -46,7 +76,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Kept computed-path inspection non-disruptive by pinning Inspector data without switching tabs automatically.
 - Reused the selected-path representation so computed paths retain ordered edge IDs, loops, repeated traversals, parallel-edge identity, semantic data, and export behavior.
 - Kept computed-path viewport fitting separate from layout so selecting a result does not rearrange states.
-- Reserved the path-search model for future ordered transition constraints and partial transition-data matching.
+- Extended the path-search model from unconstrained alternatives to data-aware Declare-constrained path discovery.
+- Passed transition names, inputs, and outputs into path-search evaluation while retaining exact edge-ID identity.
+- Kept unconstrained path search available when no Declare constraints are enabled.
+- Made the target state optional for constrained searches while retaining required-target behavior when a target is supplied.
+- Invalidated computed results when the active constraint specification changes.
+- Redesigned the transition-condition editor into clearer field, collection traversal, comparison, and typed-value sections.
+- Updated condition summaries to display configured input/output paths and per-level array access.
+- Made the side-panel maximum width responsive to the current viewport.
+- Preserved path-search results and condition-editor state while switching tabs or collapsing the side panel.
+- Extracted side-panel sizing, persistence parsing, and keyboard-resize rules into independently tested utility functions.
 
 ### Fixed
 
@@ -59,6 +98,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Fixed computed paths being difficult to locate by fitting the viewport without changing node positions.
 - Fixed leaving a computed-path view requiring manual graph reconstruction by restoring the saved graph view explicitly.
 - Fixed edge-unique paths with identical state sequences being visually indistinguishable by separating parallel curves and exposing exact transition details.
+- Fixed existence-style conditions retaining an irrelevant comparison value after serialization.
+- Fixed nested array paths losing per-level indexed or existential access choices during editor round trips.
+- Fixed side-panel widths restored from storage exceeding the maximum allowed by the current viewport.
+- Fixed keyboard End resizing using the absolute configured maximum instead of the viewport-aware maximum.
+- Fixed Cytoscape sizing after side-panel collapse, expansion, and resizing.
 
 ## [0.4.0](https://github.com/dbera/LTSVisualizer/compare/v0.3.0...v0.4.0) - 2026-08-06
 
@@ -275,7 +319,7 @@ When preparing a release:
 Example:
 
 ```markdown
-## [0.5.0] - YYYY-MM-DD
+## [0.6.0] - YYYY-MM-DD
 ```
 
 ## Versioning guidance
