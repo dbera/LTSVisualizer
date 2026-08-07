@@ -70,6 +70,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Resolves object-property and zero-based array-index path segments.
+ * Missing properties, negative indexes, out-of-range indexes, and indexing a
+ * non-array value are all reported as missing. An existing null value remains
+ * distinct from a missing value.
+ */
 export function resolveDataPath(
   root: unknown,
   path: readonly DataPathSegment[],
@@ -78,16 +84,26 @@ export function resolveDataPath(
 
   for (const segment of path) {
     if (typeof segment === "number") {
-      if (!Array.isArray(current) || segment < 0 || segment >= current.length) {
+      if (
+        !Number.isInteger(segment) ||
+        !Array.isArray(current) ||
+        segment < 0 ||
+        segment >= current.length
+      ) {
         return { found: false, value: undefined };
       }
+
       current = current[segment];
       continue;
     }
 
-    if (!isRecord(current) || !Object.prototype.hasOwnProperty.call(current, segment)) {
+    if (
+      !isRecord(current) ||
+      !Object.prototype.hasOwnProperty.call(current, segment)
+    ) {
       return { found: false, value: undefined };
     }
+
     current = current[segment];
   }
 
@@ -95,9 +111,7 @@ export function resolveDataPath(
 }
 
 function deepEqual(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) {
-    return true;
-  }
+  if (Object.is(left, right)) return true;
 
   if (Array.isArray(left) && Array.isArray(right)) {
     return (
@@ -109,6 +123,7 @@ function deepEqual(left: unknown, right: unknown): boolean {
   if (isRecord(left) && isRecord(right)) {
     const leftKeys = Object.keys(left);
     const rightKeys = Object.keys(right);
+
     return (
       leftKeys.length === rightKeys.length &&
       leftKeys.every(
@@ -126,18 +141,18 @@ export function matchesPartialObject(
   actual: unknown,
   expected: Record<string, JsonValue>,
 ): boolean {
-  if (!isRecord(actual)) {
-    return false;
-  }
+  if (!isRecord(actual)) return false;
 
   return Object.entries(expected).every(([key, expectedValue]) => {
-    if (!Object.prototype.hasOwnProperty.call(actual, key)) {
-      return false;
-    }
+    if (!Object.prototype.hasOwnProperty.call(actual, key)) return false;
 
     const actualValue = actual[key];
+
     if (isRecord(expectedValue)) {
-      return matchesPartialObject(actualValue, expectedValue as Record<string, JsonValue>);
+      return matchesPartialObject(
+        actualValue,
+        expectedValue as Record<string, JsonValue>,
+      );
     }
 
     return deepEqual(actualValue, expectedValue);
@@ -145,9 +160,7 @@ export function matchesPartialObject(
 }
 
 function formatPath(path: readonly DataPathSegment[]): string {
-  if (path.length === 0) {
-    return "<root>";
-  }
+  if (path.length === 0) return "<root>";
 
   return path
     .map((segment) =>
@@ -157,11 +170,15 @@ function formatPath(path: readonly DataPathSegment[]): string {
     .replace(/\.\[/g, "[");
 }
 
-function validateValueCondition(condition: ValueCondition, location: string): string[] {
+function validateValueCondition(
+  condition: ValueCondition,
+  location: string,
+): string[] {
   if (condition.type === "group") {
     if (condition.conditions.length === 0) {
       return [`${location} must contain at least one condition.`];
     }
+
     return condition.conditions.flatMap((child, index) =>
       validateValueCondition(child, `${location}.conditions[${index}]`),
     );
@@ -175,11 +192,15 @@ function validateValueCondition(condition: ValueCondition, location: string): st
     const requiresValue = !["exists", "does-not-exist"].includes(
       condition.operator,
     );
+
     if (requiresValue && condition.value === undefined) {
       return [`${location} requires a comparison value.`];
     }
+
     if (!requiresValue && condition.value !== undefined) {
-      return [`${location} must not define a value for ${condition.operator}.`];
+      return [
+        `${location} must not define a value for ${condition.operator}.`,
+      ];
     }
   }
 
@@ -191,8 +212,11 @@ export function validateTransitionCondition(
 ): string[] {
   if (condition.type === "group") {
     if (condition.conditions.length === 0) {
-      return ["The transition condition group must contain at least one condition."];
+      return [
+        "The transition condition group must contain at least one condition.",
+      ];
     }
+
     return condition.conditions.flatMap((child, index) =>
       validateTransitionConditionAt(child, `conditions[${index}]`),
     );
@@ -209,6 +233,7 @@ function validateTransitionConditionAt(
     if (condition.conditions.length === 0) {
       return [`${location} must contain at least one condition.`];
     }
+
     return condition.conditions.flatMap((child, index) =>
       validateTransitionConditionAt(child, `${location}.conditions[${index}]`),
     );
@@ -226,16 +251,9 @@ function evaluateComparison(
 ): boolean {
   const resolved = resolveDataPath(root, condition.path);
 
-  if (condition.operator === "exists") {
-    return resolved.found;
-  }
-  if (condition.operator === "does-not-exist") {
-    return !resolved.found;
-  }
-  if (!resolved.found) {
-    return false;
-  }
-
+  if (condition.operator === "exists") return resolved.found;
+  if (condition.operator === "does-not-exist") return !resolved.found;
+  if (!resolved.found) return false;
   if (condition.operator === "=") {
     return deepEqual(resolved.value, condition.value);
   }
@@ -243,7 +261,10 @@ function evaluateComparison(
     return !deepEqual(resolved.value, condition.value);
   }
 
-  if (typeof resolved.value !== "number" || typeof condition.value !== "number") {
+  if (
+    typeof resolved.value !== "number" ||
+    typeof condition.value !== "number"
+  ) {
     return false;
   }
 
@@ -259,26 +280,37 @@ function evaluateComparison(
   }
 }
 
-function evaluateValueCondition(condition: ValueCondition, root: unknown): boolean {
+function evaluateValueCondition(
+  condition: ValueCondition,
+  root: unknown,
+): boolean {
   switch (condition.type) {
     case "comparison":
       return evaluateComparison(condition, root);
     case "partial-object": {
       const resolved = resolveDataPath(root, condition.path);
-      return resolved.found && matchesPartialObject(resolved.value, condition.value);
+      return (
+        resolved.found && matchesPartialObject(resolved.value, condition.value)
+      );
     }
     case "contains-item": {
       const resolved = resolveDataPath(root, condition.path);
       return (
         resolved.found &&
         Array.isArray(resolved.value) &&
-        resolved.value.some((item) => evaluateValueCondition(condition.condition, item))
+        resolved.value.some((item) =>
+          evaluateValueCondition(condition.condition, item),
+        )
       );
     }
     case "group":
       return condition.operator === "and"
-        ? condition.conditions.every((child) => evaluateValueCondition(child, root))
-        : condition.conditions.some((child) => evaluateValueCondition(child, root));
+        ? condition.conditions.every((child) =>
+            evaluateValueCondition(child, root),
+          )
+        : condition.conditions.some((child) =>
+            evaluateValueCondition(child, root),
+          );
   }
 }
 
@@ -287,7 +319,10 @@ function evaluateValidatedTransitionCondition(
   transition: TransitionData,
 ): boolean {
   if (condition.type === "source") {
-    return evaluateValueCondition(condition.condition, transition[condition.source]);
+    return evaluateValueCondition(
+      condition.condition,
+      transition[condition.source],
+    );
   }
 
   return condition.operator === "and"
@@ -304,9 +339,8 @@ export function evaluateTransitionCondition(
   transition: TransitionData,
 ): ConditionEvaluation {
   const errors = validateTransitionCondition(condition);
-  if (errors.length > 0) {
-    return { matches: false, errors };
-  }
+
+  if (errors.length > 0) return { matches: false, errors };
 
   return {
     matches: evaluateValidatedTransitionCondition(condition, transition),

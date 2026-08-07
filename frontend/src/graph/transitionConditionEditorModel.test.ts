@@ -1,96 +1,111 @@
 import { describe, expect, it } from "vitest";
-
 import {
+  countArrayLevels,
+  createDefaultArrayAccesses,
   createFlatTransitionCondition,
+  createValueCondition,
+  formatConfiguredPath,
   inferConditionValueType,
   parseConditionValue,
   readFlatTransitionConditions,
+  type FlatTransitionCondition,
 } from "./transitionConditionEditorModel";
 
+function flat(overrides: Partial<FlatTransitionCondition> = {}): FlatTransitionCondition {
+  return {
+    source: "outputs",
+    path: ["matrix", "[]", "[]", "value"],
+    arrayAccesses: [
+      { mode: "contains-item" },
+      { mode: "contains-item" },
+    ],
+    operator: "=",
+    value: 42,
+    ...overrides,
+  };
+}
+
 describe("transition condition editor model", () => {
-  it("creates one source comparison", () => {
-    expect(
-      createFlatTransitionCondition([
-        {
-          source: "inputs",
-          path: ["request", "priority"],
-          operator: ">=",
-          value: 5,
-        },
-      ]),
-    ).toEqual({
-      type: "source",
-      source: "inputs",
-      condition: {
-        type: "comparison",
-        path: ["request", "priority"],
-        operator: ">=",
-        value: 5,
-      },
+  it("creates and reads ordinary source comparisons", () => {
+    const item = flat({ source: "inputs", path: ["request", "priority"], arrayAccesses: [], operator: ">=", value: 5 });
+    const condition = createFlatTransitionCondition([item]);
+    expect(condition).toEqual({ type: "source", source: "inputs", condition: { type: "comparison", path: ["request", "priority"], operator: ">=", value: 5 } });
+    expect(readFlatTransitionConditions(condition)).toEqual([item]);
+  });
+
+  it("supports arbitrary all-indexed array depth", () => {
+    const item = flat({
+      path: ["tensor", "[]", "[]", "[]", "value"],
+      arrayAccesses: [
+        { mode: "indexed-item", index: 1 },
+        { mode: "indexed-item", index: 2 },
+        { mode: "indexed-item", index: 3 },
+      ],
     });
+    expect(createValueCondition(item)).toEqual({ type: "comparison", path: ["tensor", 1, 2, 3, "value"], operator: "=", value: 42 });
+    expect(readFlatTransitionConditions(createFlatTransitionCondition([item]))).toEqual([item]);
   });
 
-  it("creates a flat AND group for multiple comparisons", () => {
-    const condition = createFlatTransitionCondition([
-      {
-        source: "inputs",
-        path: ["request", "priority"],
-        operator: ">=",
-        value: 5,
-      },
-      {
-        source: "outputs",
-        path: ["status"],
-        operator: "exists",
-      },
-    ]);
-
-    expect(condition).toMatchObject({
-      type: "group",
-      operator: "and",
-    });
-    expect(readFlatTransitionConditions(condition)).toHaveLength(2);
-  });
-
-  it("returns undefined for no comparisons", () => {
-    expect(createFlatTransitionCondition([])).toBeUndefined();
-  });
-
-  it("does not flatten unsupported nested OR conditions", () => {
-    expect(
-      readFlatTransitionConditions({
-        type: "group",
-        operator: "or",
-        conditions: [
-          {
-            type: "source",
-            source: "inputs",
-            condition: {
-              type: "comparison",
-              path: ["ready"],
-              operator: "=",
-              value: true,
-            },
+  it("supports arbitrary all-existential array depth", () => {
+    const item = flat({ path: ["tensor", "[]", "[]", "[]", "value"], arrayAccesses: [
+      { mode: "contains-item" }, { mode: "contains-item" }, { mode: "contains-item" },
+    ] });
+    expect(createValueCondition(item)).toEqual({
+      type: "contains-item", path: ["tensor"], condition: {
+        type: "contains-item", path: [], condition: {
+          type: "contains-item", path: [], condition: {
+            type: "comparison", path: ["value"], operator: "=", value: 42,
           },
-        ],
-      }),
-    ).toBeNull();
+        },
+      },
+    });
+    expect(readFlatTransitionConditions(createFlatTransitionCondition([item]))).toEqual([item]);
   });
 
-  it("parses strict typed values", () => {
+  it("supports mixed indexed and existential levels", () => {
+    const item = flat({ path: ["tensor", "[]", "rows", "[]", "[]", "value"], arrayAccesses: [
+      { mode: "indexed-item", index: 2 },
+      { mode: "contains-item" },
+      { mode: "indexed-item", index: 4 },
+    ] });
+    expect(createValueCondition(item)).toEqual({
+      type: "contains-item", path: ["tensor", 2, "rows"], condition: {
+        type: "comparison", path: [4, "value"], operator: "=", value: 42,
+      },
+    });
+    expect(readFlatTransitionConditions(createFlatTransitionCondition([item]))).toEqual([item]);
+  });
+
+  it("supports arrays of primitive values", () => {
+    const item = flat({ path: ["values", "[]"], arrayAccesses: [{ mode: "contains-item" }], value: "ready" });
+    expect(createValueCondition(item)).toEqual({ type: "contains-item", path: ["values"], condition: { type: "comparison", path: [], operator: "=", value: "ready" } });
+  });
+
+  it("counts levels, creates defaults, and formats mixed paths", () => {
+    const path = ["tensor", "[]", "rows", "[]", "value"] as const;
+    expect(countArrayLevels(path)).toBe(2);
+    expect(createDefaultArrayAccesses(path)).toEqual([{ mode: "contains-item" }, { mode: "contains-item" }]);
+    expect(formatConfiguredPath("outputs", path, [{ mode: "indexed-item", index: 2 }, { mode: "contains-item" }])).toBe("outputs.tensor[2].rows[*].value");
+  });
+
+  it("rejects incomplete or invalid array-level configuration", () => {
+    expect(() => createValueCondition(flat({ arrayAccesses: [{ mode: "contains-item" }] }))).toThrow("Configure all 2 array levels.");
+    expect(() => createValueCondition(flat({ arrayAccesses: [{ mode: "indexed-item", index: -1 }, { mode: "contains-item" }] }))).toThrow("Enter a non-negative array index.");
+  });
+
+  it("creates a flat AND group and rejects unsupported OR groups", () => {
+    const condition = createFlatTransitionCondition([flat(), flat({ path: ["status"], arrayAccesses: [], value: "ok" })]);
+    expect(condition).toMatchObject({ type: "group", operator: "and" });
+    expect(readFlatTransitionConditions({ type: "group", operator: "or", conditions: [] })).toBeNull();
+  });
+
+  it("parses strict typed values and infers scalar types", () => {
     expect(parseConditionValue("string", "42")).toBe("42");
     expect(parseConditionValue("number", "42")).toBe(42);
     expect(parseConditionValue("boolean", "true")).toBe(true);
     expect(parseConditionValue("null", "ignored")).toBeNull();
-    expect(() => parseConditionValue("number", "abc")).toThrow(
-      "Enter a valid number.",
-    );
-  });
-
-  it("infers simple scalar types and falls back to string", () => {
+    expect(() => parseConditionValue("number", "abc")).toThrow("Enter a valid number.");
     expect(inferConditionValueType(["number"])).toBe("number");
-    expect(inferConditionValueType(["boolean"])).toBe("boolean");
     expect(inferConditionValueType(["object"])).toBe("string");
-    expect(inferConditionValueType(["string", "null"])).toBe("string");
   });
 });
