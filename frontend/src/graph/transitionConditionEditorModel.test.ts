@@ -108,4 +108,82 @@ describe("transition condition editor model", () => {
     expect(inferConditionValueType(["number"])).toBe("number");
     expect(inferConditionValueType(["object"])).toBe("string");
   });
+
+  it("creates empty condition lists as undefined", () => {
+    expect(createFlatTransitionCondition([])).toBeUndefined();
+    expect(readFlatTransitionConditions(undefined)).toEqual([]);
+  });
+
+  it.each(["exists", "does-not-exist"] as const)(
+    "round-trips %s without a value",
+    (operator) => {
+      const item = flat({
+        path: ["matrix", "[]", "status"],
+        arrayAccesses: [{ mode: "indexed-item", index: 3 }],
+        operator,
+        value: "discarded",
+      });
+      const condition = createFlatTransitionCondition([item]);
+      expect(condition).toEqual({
+        type: "source",
+        source: "outputs",
+        condition: {
+          type: "comparison",
+          path: ["matrix", 3, "status"],
+          operator,
+        },
+      });
+      const { value: _discarded, ...expected } = item;
+      expect(readFlatTransitionConditions(condition)).toEqual([expected]);
+    },
+  );
+
+  it("preserves mixed sources and repeated fields in one AND group", () => {
+    const items = [
+      flat({
+        source: "inputs",
+        path: ["request", "status"],
+        arrayAccesses: [],
+        value: "ready",
+      }),
+      flat({
+        source: "outputs",
+        path: ["request", "status"],
+        arrayAccesses: [],
+        operator: "!=",
+        value: "blocked",
+      }),
+      flat({
+        source: "outputs",
+        path: ["request", "status"],
+        arrayAccesses: [],
+        operator: "exists",
+        value: undefined,
+      }),
+    ];
+    expect(readFlatTransitionConditions(createFlatTransitionCondition(items))).toEqual(items);
+  });
+
+  it("round-trips mixed traversal through every multidimensional path level", () => {
+    const item = flat({
+      path: ["tensor", "[]", "rows", "[]", "cells", "[]", "value"],
+      arrayAccesses: [
+        { mode: "contains-item" },
+        { mode: "indexed-item", index: 4 },
+        { mode: "contains-item" },
+      ],
+      operator: ">=",
+      value: 9,
+    });
+    expect(readFlatTransitionConditions(createFlatTransitionCondition([item]))).toEqual([item]);
+  });
+
+  it("parses all supported primitive values", () => {
+    expect(parseConditionValue("string", "false")).toBe("false");
+    expect(parseConditionValue("number", "-12.5")).toBe(-12.5);
+    expect(parseConditionValue("boolean", "false")).toBe(false);
+    expect(parseConditionValue("null", "anything")).toBeNull();
+    expect(() => parseConditionValue("boolean", "yes")).toThrow("Choose true or false.");
+  });
+
 });

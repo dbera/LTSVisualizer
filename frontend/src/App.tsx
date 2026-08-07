@@ -41,6 +41,15 @@ import type { BoundedPath } from "./graph/pathSearch";
 import type { StronglyConnectedComponent } from "./graph/graphAnalysis";
 import { buildTransitionCatalogue } from "./graph/transitionCatalog";
 import { buildTransitionDataCatalogue } from "./graph/transitionDataCatalogue";
+import {
+  SIDE_PANEL_COLLAPSED_STORAGE_KEY,
+  SIDE_PANEL_WIDTH_STORAGE_KEY,
+  clampSidePanelWidth,
+  getKeyboardResizedSidePanelWidth,
+  getSidePanelMaximumWidth,
+  parseStoredSidePanelCollapsed,
+  parseStoredSidePanelWidth,
+} from "./ui/sidePanelState";
 
 interface GraphNode {
   id: string;
@@ -89,26 +98,11 @@ interface GraphViewSnapshot {
 
 const TERMINAL_PAGE_SIZE = 100;
 const SCC_PAGE_SIZE = 100;
-const MIN_SIDE_PANEL_WIDTH = 380;
-const DEFAULT_SIDE_PANEL_WIDTH = 480;
-const MAX_SIDE_PANEL_WIDTH = 760;
-const SIDE_PANEL_WIDTH_STORAGE_KEY = "ltsvisualizer.sidePanelWidth";
-const SIDE_PANEL_COLLAPSED_STORAGE_KEY = "ltsvisualizer.sidePanelCollapsed";
-
-function clampSidePanelWidth(width: number): number {
-  const viewportMaximum = Math.max(
-    MIN_SIDE_PANEL_WIDTH,
-    Math.min(MAX_SIDE_PANEL_WIDTH, window.innerWidth * 0.55),
-  );
-  return Math.min(viewportMaximum, Math.max(MIN_SIDE_PANEL_WIDTH, width));
-}
-
 function readStoredSidePanelWidth(): number {
-  const stored = window.localStorage.getItem(SIDE_PANEL_WIDTH_STORAGE_KEY);
-  const parsed = Number.parseInt(stored ?? "", 10);
-  return Number.isFinite(parsed)
-    ? clampSidePanelWidth(parsed)
-    : clampSidePanelWidth(DEFAULT_SIDE_PANEL_WIDTH);
+  return parseStoredSidePanelWidth(
+    window.localStorage.getItem(SIDE_PANEL_WIDTH_STORAGE_KEY),
+    window.innerWidth,
+  );
 }
 
 function App() {
@@ -141,8 +135,9 @@ function App() {
     useState<SidePanelMode>("inspector");
   const [sidePanelWidth, setSidePanelWidth] = useState(readStoredSidePanelWidth);
   const [isSidePanelCollapsed, setIsSidePanelCollapsed] = useState(
-    () =>
-      window.localStorage.getItem(SIDE_PANEL_COLLAPSED_STORAGE_KEY) === "true",
+    () => parseStoredSidePanelCollapsed(
+      window.localStorage.getItem(SIDE_PANEL_COLLAPSED_STORAGE_KEY),
+    ),
   );
   const graphAnalysis = useGraphAnalysis();
   const pathSearch = usePathSearch();
@@ -177,7 +172,10 @@ function App() {
 
     const handlePointerMove = (pointerEvent: globalThis.PointerEvent) => {
       setSidePanelWidth(
-        clampSidePanelWidth(startWidth + startX - pointerEvent.clientX),
+        clampSidePanelWidth(
+          startWidth + startX - pointerEvent.clientX,
+          window.innerWidth,
+        ),
       );
     };
     const finishResize = () => {
@@ -194,23 +192,15 @@ function App() {
   }
 
   function resizeSidePanelWithKeyboard(event: KeyboardEvent<HTMLDivElement>) {
-    const increment = event.shiftKey ? 50 : 16;
-    let nextWidth: number | null = null;
-
-    if (event.key === "ArrowLeft") {
-      nextWidth = sidePanelWidth + increment;
-    } else if (event.key === "ArrowRight") {
-      nextWidth = sidePanelWidth - increment;
-    } else if (event.key === "Home") {
-      nextWidth = MIN_SIDE_PANEL_WIDTH;
-    } else if (event.key === "End") {
-      nextWidth = MAX_SIDE_PANEL_WIDTH;
-    }
-
-    if (nextWidth !== null) {
-      event.preventDefault();
-      setSidePanelWidth(clampSidePanelWidth(nextWidth));
-    }
+    const nextWidth = getKeyboardResizedSidePanelWidth(
+      sidePanelWidth,
+      event.key,
+      event.shiftKey,
+      window.innerWidth,
+    );
+    if (nextWidth === null) return;
+    event.preventDefault();
+    setSidePanelWidth(nextWidth);
   }
 
   function toggleSidePanel() {
@@ -1460,7 +1450,9 @@ function App() {
 
   useEffect(() => {
     const handleWindowResize = () => {
-      setSidePanelWidth((current) => clampSidePanelWidth(current));
+      setSidePanelWidth((current) =>
+        clampSidePanelWidth(current, window.innerWidth),
+      );
     };
     window.addEventListener("resize", handleWindowResize);
     return () => window.removeEventListener("resize", handleWindowResize);
@@ -1857,8 +1849,8 @@ function App() {
             role="separator"
             aria-label="Resize side panel"
             aria-orientation="vertical"
-            aria-valuemin={MIN_SIDE_PANEL_WIDTH}
-            aria-valuemax={MAX_SIDE_PANEL_WIDTH}
+            aria-valuemin={380}
+            aria-valuemax={getSidePanelMaximumWidth(window.innerWidth)}
             aria-valuenow={Math.round(sidePanelWidth)}
             tabIndex={0}
             onPointerDown={beginSidePanelResize}
