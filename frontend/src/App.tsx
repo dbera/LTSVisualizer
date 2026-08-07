@@ -1,6 +1,9 @@
 import {
   type ChangeEvent,
+  type CSSProperties,
   type FormEvent,
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
   useEffect,
   useRef,
   useState,
@@ -86,6 +89,27 @@ interface GraphViewSnapshot {
 
 const TERMINAL_PAGE_SIZE = 100;
 const SCC_PAGE_SIZE = 100;
+const MIN_SIDE_PANEL_WIDTH = 380;
+const DEFAULT_SIDE_PANEL_WIDTH = 480;
+const MAX_SIDE_PANEL_WIDTH = 760;
+const SIDE_PANEL_WIDTH_STORAGE_KEY = "ltsvisualizer.sidePanelWidth";
+const SIDE_PANEL_COLLAPSED_STORAGE_KEY = "ltsvisualizer.sidePanelCollapsed";
+
+function clampSidePanelWidth(width: number): number {
+  const viewportMaximum = Math.max(
+    MIN_SIDE_PANEL_WIDTH,
+    Math.min(MAX_SIDE_PANEL_WIDTH, window.innerWidth * 0.55),
+  );
+  return Math.min(viewportMaximum, Math.max(MIN_SIDE_PANEL_WIDTH, width));
+}
+
+function readStoredSidePanelWidth(): number {
+  const stored = window.localStorage.getItem(SIDE_PANEL_WIDTH_STORAGE_KEY);
+  const parsed = Number.parseInt(stored ?? "", 10);
+  return Number.isFinite(parsed)
+    ? clampSidePanelWidth(parsed)
+    : clampSidePanelWidth(DEFAULT_SIDE_PANEL_WIDTH);
+}
 
 function App() {
   const graphContainer = useRef<HTMLDivElement | null>(null);
@@ -115,6 +139,11 @@ function App() {
   const [selectedPath, setSelectedPath] = useState<SelectedPath | null>(null);
   const [sidePanelMode, setSidePanelMode] =
     useState<SidePanelMode>("inspector");
+  const [sidePanelWidth, setSidePanelWidth] = useState(readStoredSidePanelWidth);
+  const [isSidePanelCollapsed, setIsSidePanelCollapsed] = useState(
+    () =>
+      window.localStorage.getItem(SIDE_PANEL_COLLAPSED_STORAGE_KEY) === "true",
+  );
   const graphAnalysis = useGraphAnalysis();
   const pathSearch = usePathSearch();
   const [pathSearchSource, setPathSearchSource] = useState("");
@@ -137,6 +166,56 @@ function App() {
   const [cyclicComponentPage, setCyclicComponentPage] = useState(0);
   const [selectedCyclicComponentId, setSelectedCyclicComponentId] =
     useState<number | null>(null);
+
+  function beginSidePanelResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (isSidePanelCollapsed || event.button !== 0) return;
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startWidth = sidePanelWidth;
+    document.body.classList.add("resizing-side-panel");
+
+    const handlePointerMove = (pointerEvent: globalThis.PointerEvent) => {
+      setSidePanelWidth(
+        clampSidePanelWidth(startWidth + startX - pointerEvent.clientX),
+      );
+    };
+    const finishResize = () => {
+      document.body.classList.remove("resizing-side-panel");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", finishResize);
+      window.removeEventListener("pointercancel", finishResize);
+      window.requestAnimationFrame(() => cyRef.current?.resize());
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", finishResize);
+    window.addEventListener("pointercancel", finishResize);
+  }
+
+  function resizeSidePanelWithKeyboard(event: KeyboardEvent<HTMLDivElement>) {
+    const increment = event.shiftKey ? 50 : 16;
+    let nextWidth: number | null = null;
+
+    if (event.key === "ArrowLeft") {
+      nextWidth = sidePanelWidth + increment;
+    } else if (event.key === "ArrowRight") {
+      nextWidth = sidePanelWidth - increment;
+    } else if (event.key === "Home") {
+      nextWidth = MIN_SIDE_PANEL_WIDTH;
+    } else if (event.key === "End") {
+      nextWidth = MAX_SIDE_PANEL_WIDTH;
+    }
+
+    if (nextWidth !== null) {
+      event.preventDefault();
+      setSidePanelWidth(clampSidePanelWidth(nextWidth));
+    }
+  }
+
+  function toggleSidePanel() {
+    setIsSidePanelCollapsed((collapsed) => !collapsed);
+  }
 
   function updatePathMode(mode: PathSelectionMode) {
     pathModeRef.current = mode;
@@ -1364,6 +1443,30 @@ function App() {
   }, [pathMode, selectedPath?.edgeIds.length]);
 
   useEffect(() => {
+    window.localStorage.setItem(
+      SIDE_PANEL_WIDTH_STORAGE_KEY,
+      String(Math.round(sidePanelWidth)),
+    );
+  }, [sidePanelWidth]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      SIDE_PANEL_COLLAPSED_STORAGE_KEY,
+      String(isSidePanelCollapsed),
+    );
+    const frame = window.requestAnimationFrame(() => cyRef.current?.resize());
+    return () => window.cancelAnimationFrame(frame);
+  }, [isSidePanelCollapsed]);
+
+  useEffect(() => {
+    const handleWindowResize = () => {
+      setSidePanelWidth((current) => clampSidePanelWidth(current));
+    };
+    window.addEventListener("resize", handleWindowResize);
+    return () => window.removeEventListener("resize", handleWindowResize);
+  }, []);
+
+  useEffect(() => {
     const container = graphContainer.current;
     const cy = cyRef.current;
     if (!container || !cy || typeof ResizeObserver === "undefined") {
@@ -1730,7 +1833,14 @@ function App() {
         />
       </section>
 
-      <section className="workspace">
+      <section
+        className={`workspace${isSidePanelCollapsed ? " side-panel-collapsed" : ""}`}
+        style={
+          {
+            "--side-panel-width": `${sidePanelWidth}px`,
+          } as CSSProperties
+        }
+      >
         <div className="graph-panel">
           {!graphLoaded && (
             <div className="empty-overlay">
@@ -1741,7 +1851,47 @@ function App() {
           <div ref={graphContainer} className="graph-container" />
         </div>
 
-        <aside className="inspector">
+        {!isSidePanelCollapsed && (
+          <div
+            className="side-panel-resizer"
+            role="separator"
+            aria-label="Resize side panel"
+            aria-orientation="vertical"
+            aria-valuemin={MIN_SIDE_PANEL_WIDTH}
+            aria-valuemax={MAX_SIDE_PANEL_WIDTH}
+            aria-valuenow={Math.round(sidePanelWidth)}
+            tabIndex={0}
+            onPointerDown={beginSidePanelResize}
+            onKeyDown={resizeSidePanelWithKeyboard}
+            title="Drag to resize. Use arrow keys when focused."
+          />
+        )}
+        <aside className="inspector" aria-label="Graph tools">
+          <div className="side-panel-shell-header">
+            {!isSidePanelCollapsed && (
+              <span className="side-panel-shell-title">Graph tools</span>
+            )}
+            <button
+              type="button"
+              className={
+                isSidePanelCollapsed
+                  ? "side-panel-expand-button"
+                  : "side-panel-collapse-button"
+              }
+              onClick={toggleSidePanel}
+              aria-label={
+                isSidePanelCollapsed ? "Expand side panel" : "Collapse side panel"
+              }
+              aria-expanded={!isSidePanelCollapsed}
+              title={
+                isSidePanelCollapsed ? "Expand side panel" : "Collapse side panel"
+              }
+            >
+              <span aria-hidden="true">{isSidePanelCollapsed ? "<" : ">"}</span>
+            </button>
+          </div>
+          {!isSidePanelCollapsed && (
+            <div className="side-panel-content">
           <div className="side-panel-tabs" role="tablist" aria-label="Side panel">
             <button
               type="button"
@@ -2029,7 +2179,7 @@ function App() {
                               >
                                 <span>Cyclic component {getCyclicComponentNumber(component.id)}</span>
                                 <small>
-                                  {component.nodeIds.length} states ·{" "}
+                                  {component.nodeIds.length} states Â·{" "}
                                   {component.internalEdgeIds.length} transitions
                                 </small>
                               </button>
@@ -2244,7 +2394,7 @@ function App() {
                                   <small>
                                     {path.edgeIds.length} transition
                                     {path.edgeIds.length === 1 ? "" : "s"}
-                                    {` · Ends at state ${
+                                    {` Â· Ends at state ${
                                       path.endNodeId ??
                                       steps.at(-1)?.target ??
                                       path.startNodeId
@@ -2290,7 +2440,7 @@ function App() {
                                             >
                                               {step.source}
                                             </button>
-                                            <span aria-hidden="true">→</span>
+                                            <span aria-hidden="true">â†’</span>
                                             <button
                                               type="button"
                                               onClick={() =>
@@ -2333,6 +2483,8 @@ function App() {
               )}
             </section>
           )}
+            </div>
+          )}
         </aside>
       </section>
     </main>
@@ -2340,3 +2492,4 @@ function App() {
 }
 
 export default App;
+
