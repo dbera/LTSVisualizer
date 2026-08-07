@@ -955,3 +955,39 @@ button.active {
 .transition-condition-error {
   color: #b91c1c;
 }
+
+
+.path-search-checkbox {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  color: #334155 !important;
+  font-size: 12px !important;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.path-search-checkbox input {
+  width: auto;
+  min-width: auto;
+  margin: 0;
+  accent-color: #2563eb;
+}
+
+.path-search-checkbox:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.path-search-help {
+  margin: -2px 0 2px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.computed-path-show small {
+  max-width: 58%;
+  line-height: 1.35;
+}

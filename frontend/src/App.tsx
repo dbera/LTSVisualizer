@@ -121,6 +121,7 @@ function App() {
   const [pathSearchTarget, setPathSearchTarget] = useState("");
   const [requestedPathCount, setRequestedPathCount] = useState(5);
   const [maximumVisitsPerState, setMaximumVisitsPerState] = useState(1);
+  const [requireConstraintExercise, setRequireConstraintExercise] = useState(true);
   const [declareConstraints, setDeclareConstraints] = useState<DeclareConstraint[]>([]);
   const [shownSearchPathIndex, setShownSearchPathIndex] = useState<number | null>(null);
   const [computedPathViewActive, setComputedPathViewActive] = useState(false);
@@ -340,7 +341,10 @@ function App() {
       });
   }
 
-  function showPathContext(path: SelectedPath) {
+  function showPathContext(
+    path: SelectedPath,
+    positionCompletePath = false,
+  ) {
     const graph = graphRef.current;
     const cy = cyRef.current;
     if (!graph || !cy) return;
@@ -348,9 +352,11 @@ function App() {
     const resolvedPath = resolvePath(graph, path);
     const selectedEdges = resolvedPath.edges;
     const pathNodeIds = resolvedPath.nodeIds;
+    const uniquePathNodeIds = [...new Set(pathNodeIds)];
+    const pathNodeIdSet = new Set(uniquePathNodeIds);
     const endNodeId = resolvedPath.endNodeId;
     const outgoingEdges = getCandidateEdges(graph, path);
-    const requiredNodeIds = new Set<string>(pathNodeIds);
+    const requiredNodeIds = new Set<string>(uniquePathNodeIds);
     const requiredEdgeIds = new Set<string>([
       ...path.edgeIds,
       ...outgoingEdges.map((edge) => edge.id),
@@ -369,40 +375,103 @@ function App() {
       .remove();
     cy.endBatch();
 
-    const missingNodeIds = new Set(
-      [...requiredNodeIds].filter((nodeId) => cy.getElementById(nodeId).empty())
+    const missingPathNodeIds = uniquePathNodeIds.filter(
+      (nodeId) => cy.getElementById(nodeId).empty(),
     );
+    const missingCandidateNodeIds = [
+      ...new Set(outgoingEdges.map((edge) => edge.target)),
+    ].filter(
+      (nodeId) =>
+        !pathNodeIdSet.has(nodeId) && cy.getElementById(nodeId).empty(),
+    );
+    const missingNodeIds = new Set([
+      ...missingPathNodeIds,
+      ...missingCandidateNodeIds,
+    ]);
     const missingEdges = [...selectedEdges, ...outgoingEdges].filter(
-      (edge) => cy.getElementById(edge.id).empty()
+      (edge) => cy.getElementById(edge.id).empty(),
     );
 
-    const endpoint = cy.getElementById(endNodeId);
-    const endpointPosition = endpoint.nonempty()
-      ? endpoint.position()
-      : { x: 160, y: 160 };
-    const targetNodeIds = [...new Set(outgoingEdges.map((edge) => edge.target))];
+    const firstVisiblePathNode = uniquePathNodeIds
+      .map((nodeId) => cy.getElementById(nodeId))
+      .find((node) => node.nonempty());
+    const pathOrigin = firstVisiblePathNode?.position() ?? { x: 160, y: 160 };
 
     cy.startBatch();
 
     if (missingNodeIds.size > 0) {
-      const nodeElements = buildElements(graph, missingNodeIds, [], showTransitionLabels);
-      cy.add(nodeElements);
+      cy.add(
+        buildElements(
+          graph,
+          missingNodeIds,
+          [],
+          showTransitionLabels,
+        ),
+      );
 
-      [...missingNodeIds].forEach((nodeId) => {
-        const targetIndex = Math.max(0, targetNodeIds.indexOf(nodeId));
+      if (positionCompletePath) {
+        // Computed paths can contain many nodes that were not part of the
+        // previous neighborhood. Give those path nodes deterministic,
+        // non-overlapping positions in traversal order. Existing visible path
+        // nodes retain their coordinates, preserving the user's orientation.
+        const columnCount = Math.max(
+          1,
+          Math.ceil(Math.sqrt(uniquePathNodeIds.length)),
+        );
+        const horizontalSpacing = 230;
+        const verticalSpacing = 155;
+
+        missingPathNodeIds.forEach((nodeId) => {
+          const pathIndex = uniquePathNodeIds.indexOf(nodeId);
+          const row = Math.floor(pathIndex / columnCount);
+          const positionInRow = pathIndex % columnCount;
+          const column =
+            row % 2 === 0
+              ? positionInRow
+              : columnCount - positionInRow - 1;
+
+          cy.getElementById(nodeId).position({
+            x: pathOrigin.x + column * horizontalSpacing,
+            y: pathOrigin.y + row * verticalSpacing,
+          });
+        });
+      }
+
+      const endpoint = cy.getElementById(endNodeId);
+      const endpointPosition = endpoint.nonempty()
+        ? endpoint.position()
+        : pathOrigin;
+
+      missingCandidateNodeIds.forEach((nodeId, index) => {
         const verticalOffset =
-          targetIndex - (Math.max(targetNodeIds.length, 1) - 1) / 2;
+          index - (Math.max(missingCandidateNodeIds.length, 1) - 1) / 2;
         cy.getElementById(nodeId).position({
           x: endpointPosition.x + 230,
           y: endpointPosition.y + verticalOffset * 135,
         });
       });
+
+      // Preserve the original manual path-selection behavior. During manual
+      // extension only successor candidates are normally missing.
+      if (!positionCompletePath) {
+        const targetNodeIds = [
+          ...new Set(outgoingEdges.map((edge) => edge.target)),
+        ];
+
+        missingPathNodeIds.forEach((nodeId) => {
+          const targetIndex = Math.max(0, targetNodeIds.indexOf(nodeId));
+          const verticalOffset =
+            targetIndex - (Math.max(targetNodeIds.length, 1) - 1) / 2;
+          cy.getElementById(nodeId).position({
+            x: endpointPosition.x + 230,
+            y: endpointPosition.y + verticalOffset * 135,
+          });
+        });
+      }
     }
 
     if (missingEdges.length > 0) {
-      cy.add(
-        buildElements(graph, new Set<string>(), missingEdges, true)
-      );
+      cy.add(buildElements(graph, new Set<string>(), missingEdges, true));
     }
 
     cy.nodes().unlock();
@@ -789,11 +858,23 @@ function App() {
       setStatus(`Source state ${sourceNodeId || "(empty)"} was not found`);
       return;
     }
-    if (!graph.nodes.some((node) => node.id === targetNodeId)) {
-      setStatus(`Target state ${targetNodeId || "(empty)"} was not found`);
+    const enabledConstraints = declareConstraints.filter(
+      (constraint) => constraint.enabled,
+    );
+    if (!targetNodeId && enabledConstraints.length === 0) {
+      setStatus(
+        "Enter a target state or configure at least one enabled constraint.",
+      );
       return;
     }
-    const constraintErrors = declareConstraints
+    if (
+      targetNodeId &&
+      !graph.nodes.some((node) => node.id === targetNodeId)
+    ) {
+      setStatus(`Target state ${targetNodeId} was not found`);
+      return;
+    }
+    const constraintErrors = enabledConstraints
       .filter((constraint) => constraint.enabled)
       .flatMap((constraint) =>
         validateExecutableDeclareConstraint(constraint).map(
@@ -812,16 +893,26 @@ function App() {
         source: edge.source,
         target: edge.target,
         transition: edge.transition,
+        color: edge.color,
+        inputs_raw: edge.inputs_raw,
         inputs: edge.inputs,
+        outputs_raw: edge.outputs_raw,
         outputs: edge.outputs,
       })),
       sourceNodeId,
-      targetNodeId,
+      ...(targetNodeId
+        ? { targetNodeId, endpointMode: "specific-target" as const }
+        : { endpointMode: "constraint-satisfaction" as const }),
       requestedPathCount,
       maximumVisitsPerState,
+      requireConstraintExercise,
       constraints: { declare: declareConstraints },
     });
-    setStatus(`Searching for up to ${requestedPathCount} paths from ${sourceNodeId} to ${targetNodeId}`);
+    setStatus(
+      targetNodeId
+        ? `Searching for up to ${requestedPathCount} paths from ${sourceNodeId} to ${targetNodeId}`
+        : `Searching for up to ${requestedPathCount} constraint-satisfying paths from ${sourceNodeId}`,
+    );
   }
 
   function captureGraphViewBeforeComputedPath() {
@@ -901,7 +992,7 @@ function App() {
       setSelectedCyclicComponentId(null);
       updateSelectedPath(selected);
       updatePathMode("idle");
-      showPathContext(selected);
+      showPathContext(selected, true);
       setShownSearchPathIndex(index);
       setFocusedComputedStepKey(null);
       setComputedPathViewActive(true);
@@ -968,7 +1059,8 @@ function App() {
         ? "0"
         : graph.nodes[0].id;
       setPathSearchSource(defaultPathState);
-      setPathSearchTarget(defaultPathState);
+      setPathSearchTarget("");
+      setRequireConstraintExercise(true);
 
       if (importedPath) {
         const resolved = resolvePath(graph, importedPath);
@@ -2061,8 +2153,39 @@ function App() {
                   <form className="path-search-form" onSubmit={runPathSearch}>
                     <label htmlFor="path-search-source">Source state</label>
                     <input id="path-search-source" value={pathSearchSource} onChange={(event) => { invalidatePathSearchResults(); setPathSearchSource(event.target.value); }} disabled={pathSearch.status === "running"} />
-                    <label htmlFor="path-search-target">Target state</label>
-                    <input id="path-search-target" value={pathSearchTarget} onChange={(event) => { invalidatePathSearchResults(); setPathSearchTarget(event.target.value); }} disabled={pathSearch.status === "running"} />
+                    <label htmlFor="path-search-target">Target state (optional)</label>
+                    <input
+                      id="path-search-target"
+                      value={pathSearchTarget}
+                      placeholder="Leave empty to end at any state"
+                      onChange={(event) => {
+                        invalidatePathSearchResults();
+                        const nextTarget = event.target.value;
+                        setPathSearchTarget(nextTarget);
+                        if (!nextTarget.trim()) {
+                          setRequireConstraintExercise(true);
+                        }
+                      }}
+                      disabled={pathSearch.status === "running"}
+                    />
+                    <label className="path-search-checkbox" htmlFor="path-search-exercise">
+                      <input
+                        id="path-search-exercise"
+                        type="checkbox"
+                        checked={requireConstraintExercise}
+                        onChange={(event) => {
+                          invalidatePathSearchResults();
+                          setRequireConstraintExercise(event.target.checked);
+                        }}
+                        disabled={pathSearch.status === "running"}
+                      />
+                      <span>Require constraints to be exercised</span>
+                    </label>
+                    <p className="path-search-help">
+                      Without a target, paths may end at any state after all enabled
+                      constraints are satisfied. Exercise checking prevents vacuous
+                      matches where a constraint never participates.
+                    </p>
                     <div className="path-search-number-row">
                       <div>
                         <label htmlFor="path-search-count">Number of paths</label>
@@ -2097,7 +2220,7 @@ function App() {
                         <span>{pathSearch.result.expandedCandidateCount} candidates expanded</span>
                       </div>
                       {pathSearch.result.paths.length === 0 ? (
-                        <p className="analysis-note">No path satisfies the selected visit bound.</p>
+                        <p className="analysis-note">{pathSearchTarget.trim() ? "No path reaches the target while satisfying the configured constraints and visit bound." : "No path satisfies the configured constraints and visit bound."}</p>
                       ) : (
                         <div className="computed-path-list">
                           {pathSearch.result.paths.map((path, index) => {
@@ -2121,6 +2244,11 @@ function App() {
                                   <small>
                                     {path.edgeIds.length} transition
                                     {path.edgeIds.length === 1 ? "" : "s"}
+                                    {` · Ends at state ${
+                                      path.endNodeId ??
+                                      steps.at(-1)?.target ??
+                                      path.startNodeId
+                                    }`}
                                   </small>
                                 </button>
                                 <details className="computed-path-details">
