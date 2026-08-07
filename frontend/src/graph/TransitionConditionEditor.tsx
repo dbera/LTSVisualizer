@@ -147,76 +147,136 @@ export default function TransitionConditionEditor({
           />
           {selectedField && (
             <div className="transition-condition-draft">
-              {arrayAccesses.map((access, level) => (
-                <div className="transition-array-level" key={level}>
+              {arrayAccesses.length > 0 && (
+                <fieldset className="transition-array-section">
+                  <legend>Array traversal</legend>
+                  <div className="transition-array-levels">
+                    {arrayAccesses.map((access, level) => (
+                      <div className="transition-array-level" key={level}>
+                        <span
+                          className="transition-array-level-number"
+                          aria-hidden="true"
+                        >
+                          {level + 1}
+                        </span>
+                        <div className="transition-array-level-controls">
+                          <label>
+                            Level {level + 1} of {arrayLevelCount}
+                            <select
+                              value={access.mode}
+                              onChange={(event) => updateArrayAccess(
+                                level,
+                                event.target.value === "indexed-item"
+                                  ? { mode: "indexed-item", index: 0 }
+                                  : { mode: "contains-item" },
+                              )}
+                              disabled={disabled}
+                            >
+                              <option value="contains-item">
+                                Contains an item matching
+                              </option>
+                              <option value="indexed-item">
+                                Item at zero-based index
+                              </option>
+                            </select>
+                          </label>
+                          {access.mode === "indexed-item" && (
+                            <label className="transition-array-index">
+                              Index
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={access.index}
+                                onChange={(event) => updateArrayAccess(level, {
+                                  mode: "indexed-item",
+                                  index: Math.max(
+                                    0,
+                                    Number.parseInt(event.target.value, 10) || 0,
+                                  ),
+                                })}
+                                disabled={disabled}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
+
+              <fieldset className="transition-comparison-section">
+                <legend>Comparison</legend>
+                <div className="transition-comparison-grid">
                   <label>
-                    Array level {level + 1} of {arrayLevelCount}
+                    Operator
                     <select
-                      value={access.mode}
-                      onChange={(event) => updateArrayAccess(
-                        level,
-                        event.target.value === "indexed-item"
-                          ? { mode: "indexed-item", index: 0 }
-                          : { mode: "contains-item" },
-                      )}
+                      value={operator}
+                      onChange={(event) => {
+                        setOperator(event.target.value as ComparisonOperator);
+                        setError(null);
+                      }}
                       disabled={disabled}
                     >
-                      <option value="contains-item">Contains an item matching</option>
-                      <option value="indexed-item">Item at zero-based index</option>
+                      {OPERATORS.map((value) => (
+                        <option key={value} value={value}>{value}</option>
+                      ))}
                     </select>
                   </label>
-                  {access.mode === "indexed-item" && (
+                  {requiresValue && (
                     <label>
-                      Index for level {level + 1}
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={access.index}
-                        onChange={(event) => updateArrayAccess(level, {
-                          mode: "indexed-item",
-                          index: Math.max(0, Number.parseInt(event.target.value, 10) || 0),
-                        })}
+                      Type
+                      <select
+                        value={valueType}
+                        onChange={(event) => {
+                          setValueType(event.target.value as ConditionValueType);
+                          setValueText("");
+                          setError(null);
+                        }}
                         disabled={disabled}
-                      />
+                      >
+                        <option value="string">String</option>
+                        <option value="number">Number</option>
+                        <option value="boolean">Boolean</option>
+                        <option value="null">null</option>
+                      </select>
                     </label>
                   )}
-                </div>
-              ))}
-              <label>
-                Operator
-                <select value={operator} onChange={(event) => { setOperator(event.target.value as ComparisonOperator); setError(null); }} disabled={disabled}>
-                  {OPERATORS.map((value) => <option key={value} value={value}>{value}</option>)}
-                </select>
-              </label>
-              {requiresValue && (
-                <>
-                  <label>
-                    Type
-                    <select value={valueType} onChange={(event) => { setValueType(event.target.value as ConditionValueType); setValueText(""); setError(null); }} disabled={disabled}>
-                      <option value="string">String</option>
-                      <option value="number">Number</option>
-                      <option value="boolean">Boolean</option>
-                      <option value="null">null</option>
-                    </select>
-                  </label>
-                  {valueType === "boolean" ? (
-                    <label>
+                  {requiresValue && valueType === "boolean" ? (
+                    <label className="transition-condition-value">
                       Value
-                      <select value={valueText || "true"} onChange={(event) => setValueText(event.target.value)} disabled={disabled}>
+                      <select
+                        value={valueText || "true"}
+                        onChange={(event) => setValueText(event.target.value)}
+                        disabled={disabled}
+                      >
                         <option value="true">true</option>
                         <option value="false">false</option>
                       </select>
                     </label>
-                  ) : valueType !== "null" ? (
-                    <label>
+                  ) : requiresValue && valueType !== "null" ? (
+                    <label className="transition-condition-value">
                       Value
-                      <input type={valueType === "number" ? "number" : "text"} value={valueText} onChange={(event) => setValueText(event.target.value)} disabled={disabled} />
+                      <input
+                        type={valueType === "number" ? "number" : "text"}
+                        value={valueText}
+                        onChange={(event) => setValueText(event.target.value)}
+                        disabled={disabled}
+                      />
                     </label>
                   ) : null}
-                </>
-              )}
-              <button type="button" onClick={addCondition} disabled={disabled}>Add condition</button>
+                </div>
+              </fieldset>
+
+              <button
+                type="button"
+                className="transition-condition-add"
+                onClick={addCondition}
+                disabled={disabled}
+              >
+                Add condition
+              </button>
             </div>
           )}
           {error && <p className="transition-condition-error">{error}</p>}
@@ -225,3 +285,4 @@ export default function TransitionConditionEditor({
     </section>
   );
 }
+
