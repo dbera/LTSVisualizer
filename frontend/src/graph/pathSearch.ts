@@ -444,7 +444,9 @@ export function findKShortestBoundedPaths(
         edge,
       );
 
-      if (!getMonitorSetStatus(nextMonitorEntries).viable) {
+      const nextMonitorStatus = getMonitorSetStatus(nextMonitorEntries);
+
+      if (!nextMonitorStatus.viable) {
         continue;
       }
 

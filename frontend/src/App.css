@@ -712,3 +712,21 @@ button.active {
   text-decoration: underline;
 }
 
+
+
+.declare-builder { display: grid; gap: 10px; margin-top: 8px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
+.declare-builder-heading, .declare-constraint-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.declare-builder-heading > div { display: grid; gap: 2px; }
+.declare-builder-heading strong { font-size: 13px; }
+.declare-builder-heading span, .declare-empty, .declare-description { color: #64748b; font-size: 11px; }
+.declare-builder-heading button, .declare-constraint-toolbar button { padding: 6px 8px; font-size: 11px; }
+.declare-empty { margin: 0; padding: 9px; border: 1px dashed #cbd5e1; border-radius: 7px; }
+.declare-constraint-list { display: grid; gap: 9px; }
+.declare-constraint-card { display: grid; gap: 8px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; }
+.declare-constraint-card.invalid { border-color: #fca5a5; background: #fff7f7; }
+.declare-constraint-card > label { display: grid; gap: 5px; color: #475569; font-size: 11px; font-weight: 700; }
+.declare-constraint-card select, .declare-constraint-card input:not([type="checkbox"]) { width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; }
+.declare-constraint-toolbar label { display: inline-flex; align-items: center; gap: 6px; color: #334155; font-size: 11px; font-weight: 700; }
+.declare-constraint-toolbar input { width: auto; }
+.declare-description { margin: 0; line-height: 1.4; }
+.declare-errors { margin: 0; padding-left: 18px; color: #b91c1c; font-size: 10px; line-height: 1.4; }

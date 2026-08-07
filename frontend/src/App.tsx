@@ -8,6 +8,9 @@ import {
 import cytoscape from "cytoscape";
 import "./App.css";
 import JsonViewer, { type JsonValue } from "./components/JsonViewer";
+import DeclareConstraintBuilder from "./graph/DeclareConstraintBuilder";
+import type { DeclareConstraint } from "./graph/declareConstraints";
+import { validateExecutableDeclareConstraint } from "./graph/declareMonitorFactory";
 import PathSelectionControls, {
   type PathSelectionMode,
 } from "./components/PathSelectionControls";
@@ -116,6 +119,7 @@ function App() {
   const [pathSearchTarget, setPathSearchTarget] = useState("");
   const [requestedPathCount, setRequestedPathCount] = useState(5);
   const [maximumVisitsPerState, setMaximumVisitsPerState] = useState(1);
+  const [declareConstraints, setDeclareConstraints] = useState<DeclareConstraint[]>([]);
   const [shownSearchPathIndex, setShownSearchPathIndex] = useState<number | null>(null);
   const [computedPathViewActive, setComputedPathViewActive] = useState(false);
   const [focusedComputedStepKey, setFocusedComputedStepKey] = useState<string | null>(null);
@@ -773,6 +777,17 @@ function App() {
       setStatus(`Target state ${targetNodeId || "(empty)"} was not found`);
       return;
     }
+    const constraintErrors = declareConstraints
+      .filter((constraint) => constraint.enabled)
+      .flatMap((constraint) =>
+        validateExecutableDeclareConstraint(constraint).map(
+          (error) => `${constraint.id}: ${error}`,
+        ),
+      );
+    if (constraintErrors.length > 0) {
+      setStatus(`Fix the Declare constraints: ${constraintErrors.join(" ")}`);
+      return;
+    }
     setShownSearchPathIndex(null);
     pathSearch.run({
       nodeIds: graph.nodes.map((node) => node.id),
@@ -788,7 +803,7 @@ function App() {
       targetNodeId,
       requestedPathCount,
       maximumVisitsPerState,
-      constraints: {},
+      constraints: { declare: declareConstraints },
     });
     setStatus(`Searching for up to ${requestedPathCount} paths from ${sourceNodeId} to ${targetNodeId}`);
   }
@@ -898,6 +913,7 @@ function App() {
 
     graphAnalysis.reset();
     pathSearch.reset();
+    setDeclareConstraints([]);
     setShownSearchPathIndex(null);
     setFocusedComputedStepKey(null);
     setComputedPathViewActive(false);
@@ -2031,6 +2047,11 @@ function App() {
                         <input id="path-search-visits" type="number" min="1" max="10" step="1" value={maximumVisitsPerState} onChange={(event) => setMaximumVisitsPerState(Math.max(1, Number.parseInt(event.target.value, 10) || 1))} disabled={pathSearch.status === "running"} />
                       </div>
                     </div>
+                    <DeclareConstraintBuilder
+                      constraints={declareConstraints}
+                      disabled={pathSearch.status === "running"}
+                      onChange={setDeclareConstraints}
+                    />
                     <p className="analysis-note">A visit limit of 1 produces loopless paths. Higher values allow bounded revisits. Paths are unique by ordered edge IDs.</p>
                     {pathSearch.status === "running" ? (
                       <button type="button" onClick={pathSearch.cancel}>Cancel</button>

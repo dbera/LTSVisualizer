@@ -38,6 +38,70 @@ describe("findKShortestBoundedPaths", () => {
     expect(result.exhausted).toBe(true);
   });
 
+  it("rejects a real Thales-style path that violates Chain Response", () => {
+    const result = findKShortestBoundedPaths({
+      nodeIds: ["0", "1", "2", "10"],
+      edges: [
+        {
+          id: "edge-0",
+          source: "0",
+          target: "1",
+          transition: "RootSystemUser_SubmitLoginAttempt",
+        },
+        {
+          id: "edge-1",
+          source: "1",
+          target: "2",
+          transition: "RootProtectedApplication_InvalidLogin",
+        },
+        {
+          id: "edge-2",
+          source: "2",
+          target: "10",
+          transition: "RootSystemUser_ReceiveAuthenticalResult",
+        },
+      ],
+      sourceNodeId: "0",
+      targetNodeId: "10",
+      requestedPathCount: 5,
+      maximumVisitsPerState: 1,
+      constraints: {
+        declare: [
+          {
+            id: "login-chain-response",
+            template: "chain-response",
+            enabled: true,
+            activation: {
+              relation: "or",
+              predicates: [
+                {
+                  transition: {
+                    operator: "equals",
+                    value: "RootSystemUser_SubmitLoginAttempt",
+                  },
+                },
+              ],
+            },
+            target: {
+              relation: "or",
+              predicates: [
+                {
+                  transition: {
+                    operator: "equals",
+                    value: "RootSystemUser_ReceiveAuthenticalResult",
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result.paths).toEqual([]);
+    expect(result.stopReason).toBe("exhausted");
+  });
+
   it("orders paths by increasing transition count", () => {
     const result = findKShortestBoundedPaths(
       searchInput(
