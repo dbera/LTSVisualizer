@@ -1,3 +1,12 @@
+import type { DeclareConstraint } from "./declareConstraints";
+import {
+  advanceMonitorSet,
+  createMonitorSet,
+  getMonitorSetStatus,
+  type MonitorSetEntry,
+} from "./declareMonitor";
+import { compileDeclareConstraints } from "./declareMonitorFactory";
+
 export type PathSearchEdge = {
   id: string;
   source: string;
@@ -7,21 +16,8 @@ export type PathSearchEdge = {
   outputs?: unknown;
 };
 
-/**
- * Reserved for ordered transition constraints in a future release.
- *
- * The current search accepts only an empty requiredTransitions array. Keeping
- * the constraint model in the public API now avoids changing the search input
- * and worker protocol when transition-name and partial-data matching are added.
- */
-export type TransitionPattern = {
-  transition?: string;
-  inputs?: unknown;
-  outputs?: unknown;
-};
-
 export type PathConstraints = {
-  requiredTransitions?: TransitionPattern[];
+  declare?: DeclareConstraint[];
 };
 
 export type PathSearchInput = {
@@ -67,17 +63,13 @@ type NormalizedTopology = {
   incomingNodeIdsByNodeId: Map<string, string[]>;
 };
 
-type ConstraintProgress = {
-  nextRequiredTransitionIndex: number;
-};
-
 type SearchCandidate = {
   currentNodeId: string;
   parent: SearchCandidate | null;
   incomingEdgeId: string | null;
   depth: number;
   estimatedTotalCost: number;
-  constraintProgress: ConstraintProgress;
+  monitorEntries: MonitorSetEntry[];
   insertionSequence: number;
 };
 
@@ -206,12 +198,6 @@ function buildTopology(input: PathSearchInput): NormalizedTopology {
     throw new Error("Maximum visits per state must be a positive integer.");
   }
 
-  const requiredTransitions = input.constraints?.requiredTransitions ?? [];
-
-  if (requiredTransitions.length > 0) {
-    throw new Error("Transition constraints are not implemented yet.");
-  }
-
   const outgoingEdgesByNodeId = new Map<string, PathSearchEdge[]>();
   const incomingNodeIdsByNodeId = new Map<string, string[]>();
 
@@ -296,16 +282,6 @@ function validateResourceLimit(
   return value;
 }
 
-function advanceConstraintProgress(
-  progress: ConstraintProgress,
-  _edge: PathSearchEdge,
-  _constraints: PathConstraints | undefined,
-): ConstraintProgress | null {
-  // Future implementation: match the next required transition pattern against
-  // name, inputs, outputs, and other transition data using partial matching.
-  return progress;
-}
-
 function countNodeVisits(
   candidate: SearchCandidate,
   nodeId: string,
@@ -369,6 +345,11 @@ export function findKShortestBoundedPaths(
     "Maximum queued candidates",
   );
 
+  const compiledConstraints = compileDeclareConstraints(
+    input.constraints?.declare ?? [],
+  );
+  const initialMonitorEntries = createMonitorSet(compiledConstraints);
+
   const queue = new CandidateMinHeap();
   let nextInsertionSequence = 1;
   let expandedCandidateCount = 0;
@@ -383,9 +364,7 @@ export function findKShortestBoundedPaths(
     depth: 0,
     estimatedTotalCost:
       distancesToTarget.get(input.sourceNodeId) ?? Number.POSITIVE_INFINITY,
-    constraintProgress: {
-      nextRequiredTransitionIndex: 0,
-    },
+    monitorEntries: initialMonitorEntries,
     insertionSequence: 0,
   });
 
@@ -415,22 +394,28 @@ export function findKShortestBoundedPaths(
       input.sourceNodeId === input.targetNodeId;
 
     if (candidate.currentNodeId === input.targetNodeId) {
-      const edgeIds = reconstructEdgeIds(candidate);
-      const pathKey = createPathKey(edgeIds);
+      const monitorStatus = getMonitorSetStatus(candidate.monitorEntries);
 
-      if (!emittedPathKeys.has(pathKey)) {
-        emittedPathKeys.add(pathKey);
-        paths.push({
-          startNodeId: input.sourceNodeId,
-          edgeIds,
-        });
-      }
+      if (monitorStatus.accepting) {
+        const edgeIds = reconstructEdgeIds(candidate);
+        const pathKey = createPathKey(edgeIds);
 
-      // The initial source-equals-target candidate must still be expanded so
-      // non-empty returning paths can be found. All other target arrivals end.
-      if (!isZeroTransitionSourceTargetPath) {
-        continue;
+        if (!emittedPathKeys.has(pathKey)) {
+          emittedPathKeys.add(pathKey);
+          paths.push({
+            startNodeId: input.sourceNodeId,
+            edgeIds,
+          });
+        }
+
+        // The initial source-equals-target candidate must still be expanded so
+        // non-empty returning paths can be found. Other accepted arrivals end.
+        if (!isZeroTransitionSourceTargetPath) {
+          continue;
+        }
       }
+      // A target arrival with pending obligations remains expandable because a
+      // later transition may satisfy the constraints before returning here.
     }
 
     const outgoingEdges =
@@ -454,13 +439,12 @@ export function findKShortestBoundedPaths(
         continue;
       }
 
-      const nextConstraintProgress = advanceConstraintProgress(
-        candidate.constraintProgress,
+      const nextMonitorEntries = advanceMonitorSet(
+        candidate.monitorEntries,
         edge,
-        input.constraints,
       );
 
-      if (nextConstraintProgress === null) {
+      if (!getMonitorSetStatus(nextMonitorEntries).viable) {
         continue;
       }
 
@@ -470,7 +454,7 @@ export function findKShortestBoundedPaths(
         incomingEdgeId: edge.id,
         depth: candidate.depth + 1,
         estimatedTotalCost: candidate.depth + 1 + remainingDistance,
-        constraintProgress: nextConstraintProgress,
+        monitorEntries: nextMonitorEntries,
         insertionSequence: nextInsertionSequence,
       });
       nextInsertionSequence += 1;
