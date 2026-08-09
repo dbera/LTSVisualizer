@@ -441,3 +441,59 @@ describe("serialization and round trips", () => {
     expect(text.endsWith("\n")).toBe(true);
   });
 });
+
+describe("Declare constraint persistence", () => {
+  const constraints = [
+    {
+      id: "persisted-response",
+      template: "response" as const,
+      enabled: true,
+      activation: {
+        relation: "or" as const,
+        predicates: [
+          {
+            transition: { operator: "equals" as const, value: "A" },
+            captures: [{ alias: "request_id", source: "inputs" as const, path: ["id"] }],
+          },
+        ],
+      },
+      target: {
+        relation: "or" as const,
+        predicates: [{ transition: { operator: "equals" as const, value: "B" } }],
+      },
+      correlation: {
+        type: "comparison" as const,
+        left: { kind: "target" as const, source: "outputs" as const, path: ["id"] },
+        operator: "=" as const,
+        right: { kind: "activation" as const, alias: "request_id" },
+      },
+    },
+  ];
+
+  it("round-trips constraints with a full graph document", () => {
+    const document = createGraphJsonDocument(graph, undefined, constraints);
+    const reparsed = parseGraphJsonText(serializeGraphJson(document));
+    expect(reparsed.declareConstraints).toEqual(constraints);
+    expect(reparsed.document.declareConstraints).toEqual(constraints);
+  });
+
+  it("round-trips constraints with a selected-path document", () => {
+    const path = { startNodeId: "0", edgeIds: ["e01a"] };
+    const document = createSelectedPathJsonDocument(
+      graph,
+      path,
+      undefined,
+      constraints,
+    );
+
+    expect(
+      parseGraphJsonText(serializeGraphJson(document)).declareConstraints,
+    ).toEqual(constraints);
+  });
+
+  it("omits empty constraints and reads old documents as an empty list", () => {
+    const document = createGraphJsonDocument(graph);
+    expect(document).not.toHaveProperty("declareConstraints");
+    expect(parseGraphJsonValue(document).declareConstraints).toEqual([]);
+  });
+  });

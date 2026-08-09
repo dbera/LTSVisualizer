@@ -1,3 +1,5 @@
+import type { DeclareConstraint } from "./declareConstraints";
+import { parseDeclareConstraintsJson } from "./declareConstraintJson";
 import {
   resolvePath,
   type PathEdge,
@@ -38,6 +40,7 @@ export interface GraphJsonDocument {
   metadata?: GraphJsonMetadata;
   nodes: JsonGraphNode[];
   edges: JsonGraphEdge[];
+  declareConstraints?: DeclareConstraint[];
 }
 
 export interface SelectedPathJsonDocument {
@@ -53,6 +56,7 @@ export interface SelectedPathJsonDocument {
   nodes: JsonGraphNode[];
   edges: JsonGraphEdge[];
   path: SelectedPath;
+  declareConstraints?: DeclareConstraint[];
 }
 
 export type LtsVisualizerJsonDocument =
@@ -63,6 +67,7 @@ export interface ParsedGraphJson {
   document: LtsVisualizerJsonDocument;
   graph: JsonGraphData;
   selectedPath: SelectedPath | null;
+  declareConstraints: DeclareConstraint[];
 }
 
 export class GraphJsonError extends Error {
@@ -261,6 +266,10 @@ function normalizeDocument(value: unknown): LtsVisualizerJsonDocument {
     ? "selected-path"
     : "graph";
   const metadata = parseMetadata(root.metadata);
+  const declareConstraints =
+    root.declareConstraints === undefined
+      ? []
+      : parseDeclareConstraintsJson(root.declareConstraints);
 
   if (type === "selected-path") {
     const selectedPath = parseSelectedPath(root.path);
@@ -282,6 +291,7 @@ function normalizeDocument(value: unknown): LtsVisualizerJsonDocument {
       nodes,
       edges,
       path: selectedPath,
+      ...(declareConstraints.length > 0 ? { declareConstraints } : {}),
     };
   }
 
@@ -292,6 +302,7 @@ function normalizeDocument(value: unknown): LtsVisualizerJsonDocument {
     ...(metadata ? { metadata } : {}),
     nodes,
     edges,
+    ...(declareConstraints.length > 0 ? { declareConstraints } : {}),
   };
 }
 
@@ -314,12 +325,14 @@ export function parseGraphJsonValue(value: unknown): ParsedGraphJson {
     document,
     graph: { nodes: document.nodes, edges: document.edges },
     selectedPath: document.type === "selected-path" ? document.path : null,
+    declareConstraints: document.declareConstraints ?? [],
   };
 }
 
 export function createGraphJsonDocument(
   graph: JsonGraphData,
-  metadata?: GraphJsonMetadata
+  metadata?: GraphJsonMetadata,
+  declareConstraints: readonly DeclareConstraint[] = [],
 ): GraphJsonDocument {
   return parseGraphJsonValue({
     format: "ltsvisualizer",
@@ -332,13 +345,17 @@ export function createGraphJsonDocument(
     },
     nodes: graph.nodes,
     edges: graph.edges,
+    ...(declareConstraints.length > 0
+      ? { declareConstraints: structuredClone(declareConstraints) }
+      : {}),
   }).document as GraphJsonDocument;
 }
 
 export function createSelectedPathJsonDocument(
   graph: JsonGraphData,
   path: SelectedPath,
-  metadata?: GraphJsonMetadata
+  metadata?: GraphJsonMetadata,
+  declareConstraints: readonly DeclareConstraint[] = [],
 ): SelectedPathJsonDocument {
   const resolved = resolvePath(graph, path);
   const selectedNodeIds = new Set(resolved.nodeIds);
@@ -362,6 +379,9 @@ export function createSelectedPathJsonDocument(
     nodes: pathGraph.nodes,
     edges: pathGraph.edges,
     path,
+    ...(declareConstraints.length > 0
+      ? { declareConstraints: structuredClone(declareConstraints) }
+      : {}),
   }).document as SelectedPathJsonDocument;
 }
 

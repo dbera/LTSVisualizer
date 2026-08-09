@@ -672,9 +672,11 @@ function App() {
       const safeName = sourceName
         .replace(/[^a-zA-Z0-9._-]+/g, "-")
         .replace(/^-+|-+$/g, "") || "graph";
-      const document = createGraphJsonDocument(graph, {
-        title: sourceName,
-      });
+      const document = createGraphJsonDocument(
+        graph,
+        { title: sourceName },
+        declareConstraints,
+      );
       const exportFileName = `${safeName}.json`;
 
       downloadTextFile(
@@ -722,9 +724,14 @@ function App() {
 
     try {
       const resolved = resolvePath(graph, path);
-      const document = createSelectedPathJsonDocument(graph, path, {
-        title: `Selected path ${resolved.startNodeId} to ${resolved.endNodeId}`,
-      });
+      const document = createSelectedPathJsonDocument(
+        graph,
+        path,
+        {
+          title: `Selected path ${resolved.startNodeId} to ${resolved.endNodeId}`,
+        },
+        declareConstraints,
+      );
       const fileName = `LTSVisualizer-path-${resolved.startNodeId}-to-${resolved.endNodeId}.json`;
       downloadTextFile(
         serializeGraphJson(document),
@@ -1113,6 +1120,7 @@ function App() {
       const parsed = parseGraphJsonText(await file.text());
       const graph: GraphData = parsed.graph;
       const importedPath = parsed.selectedPath;
+      setDeclareConstraints(parsed.declareConstraints);
 
       graphRef.current = graph;
       setGraphLoaded(true);
