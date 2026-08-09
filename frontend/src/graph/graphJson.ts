@@ -1,4 +1,5 @@
 import type { DeclareConstraint } from "./declareConstraints";
+import type { PathSearchEndpointMode } from "./pathSearch";
 import { parseDeclareConstraintsJson } from "./declareConstraintJson";
 import {
   resolvePath,
@@ -32,6 +33,14 @@ export interface GraphJsonMetadata {
   createdAt?: string;
   [key: string]: unknown;
 }
+export interface PersistedPathSearchConfiguration {
+  sourceNodeId: string;
+  endpointMode: PathSearchEndpointMode;
+  targetNodeId?: string;
+  requestedPathCount: number;
+  maximumVisitsPerState: number;
+  requireConstraintExercise: boolean;
+}
 
 export interface GraphJsonDocument {
   format: "ltsvisualizer";
@@ -41,6 +50,7 @@ export interface GraphJsonDocument {
   nodes: JsonGraphNode[];
   edges: JsonGraphEdge[];
   declareConstraints?: DeclareConstraint[];
+  pathSearch?: PersistedPathSearchConfiguration;
 }
 
 export interface SelectedPathJsonDocument {
@@ -57,6 +67,7 @@ export interface SelectedPathJsonDocument {
   edges: JsonGraphEdge[];
   path: SelectedPath;
   declareConstraints?: DeclareConstraint[];
+  pathSearch?: PersistedPathSearchConfiguration;
 }
 
 export type LtsVisualizerJsonDocument =
@@ -68,6 +79,7 @@ export interface ParsedGraphJson {
   graph: JsonGraphData;
   selectedPath: SelectedPath | null;
   declareConstraints: DeclareConstraint[];
+  pathSearch: PersistedPathSearchConfiguration | null;
 }
 
 export class GraphJsonError extends Error {
@@ -230,6 +242,77 @@ function parseMetadata(value: unknown): GraphJsonMetadata | undefined {
   }
   return requireObject(value, "metadata") as GraphJsonMetadata;
 }
+function requirePositiveInteger(value: unknown, label: string): number {
+  if (!Number.isInteger(value) || (value as number) < 1) {
+    throw new GraphJsonError(`${label} must be a positive integer.`);
+  }
+  return value as number;
+}
+function requireBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new GraphJsonError(`${label} must be a boolean.`);
+  }
+  return value;
+}
+function parsePathSearchConfiguration(
+  value: unknown,
+  graph: JsonGraphData,
+): PersistedPathSearchConfiguration | undefined {
+  if (value === undefined) return undefined;
+  const configuration = requireObject(value, "pathSearch");
+  const sourceNodeId = requireString(
+    configuration.sourceNodeId,
+    "pathSearch.sourceNodeId",
+  );
+  const endpointMode = configuration.endpointMode;
+  if (
+    endpointMode !== "specific-target" &&
+    endpointMode !== "constraint-satisfaction"
+  ) {
+    throw new GraphJsonError(
+      'pathSearch.endpointMode must be either "specific-target" or "constraint-satisfaction".',
+    );
+  }
+  const nodeIds = new Set(graph.nodes.map((node) => node.id));
+  if (!nodeIds.has(sourceNodeId)) {
+    throw new GraphJsonError(
+      `pathSearch.sourceNodeId references missing state ${sourceNodeId}.`,
+    );
+  }
+  let targetNodeId: string | undefined;
+  if (endpointMode === "specific-target") {
+    targetNodeId = requireString(
+      configuration.targetNodeId,
+      "pathSearch.targetNodeId",
+    );
+    if (!nodeIds.has(targetNodeId)) {
+      throw new GraphJsonError(
+        `pathSearch.targetNodeId references missing state ${targetNodeId}.`,
+      );
+    }
+  } else if (configuration.targetNodeId !== undefined) {
+    throw new GraphJsonError(
+      "pathSearch.targetNodeId must be omitted in constraint-satisfaction mode.",
+    );
+  }
+  return {
+    sourceNodeId,
+    endpointMode,
+    ...(targetNodeId ? { targetNodeId } : {}),
+    requestedPathCount: requirePositiveInteger(
+      configuration.requestedPathCount,
+      "pathSearch.requestedPathCount",
+    ),
+    maximumVisitsPerState: requirePositiveInteger(
+      configuration.maximumVisitsPerState,
+      "pathSearch.maximumVisitsPerState",
+    ),
+    requireConstraintExercise: requireBoolean(
+      configuration.requireConstraintExercise,
+      "pathSearch.requireConstraintExercise",
+    ),
+  };
+}
 
 function normalizeDocument(value: unknown): LtsVisualizerJsonDocument {
   const root = requireObject(value, "JSON root");
@@ -270,6 +353,7 @@ function normalizeDocument(value: unknown): LtsVisualizerJsonDocument {
     root.declareConstraints === undefined
       ? []
       : parseDeclareConstraintsJson(root.declareConstraints);
+  const pathSearch = parsePathSearchConfiguration(root.pathSearch, graph);
 
   if (type === "selected-path") {
     const selectedPath = parseSelectedPath(root.path);
@@ -292,6 +376,7 @@ function normalizeDocument(value: unknown): LtsVisualizerJsonDocument {
       edges,
       path: selectedPath,
       ...(declareConstraints.length > 0 ? { declareConstraints } : {}),
+      ...(pathSearch ? { pathSearch } : {}),
     };
   }
 
@@ -303,6 +388,7 @@ function normalizeDocument(value: unknown): LtsVisualizerJsonDocument {
     nodes,
     edges,
     ...(declareConstraints.length > 0 ? { declareConstraints } : {}),
+    ...(pathSearch ? { pathSearch } : {}),
   };
 }
 
@@ -326,6 +412,7 @@ export function parseGraphJsonValue(value: unknown): ParsedGraphJson {
     graph: { nodes: document.nodes, edges: document.edges },
     selectedPath: document.type === "selected-path" ? document.path : null,
     declareConstraints: document.declareConstraints ?? [],
+    pathSearch: document.pathSearch ?? null,
   };
 }
 
@@ -333,6 +420,7 @@ export function createGraphJsonDocument(
   graph: JsonGraphData,
   metadata?: GraphJsonMetadata,
   declareConstraints: readonly DeclareConstraint[] = [],
+  pathSearch?: PersistedPathSearchConfiguration,
 ): GraphJsonDocument {
   return parseGraphJsonValue({
     format: "ltsvisualizer",
@@ -348,6 +436,7 @@ export function createGraphJsonDocument(
     ...(declareConstraints.length > 0
       ? { declareConstraints: structuredClone(declareConstraints) }
       : {}),
+    ...(pathSearch ? { pathSearch: structuredClone(pathSearch) } : {}),
   }).document as GraphJsonDocument;
 }
 
@@ -356,6 +445,7 @@ export function createSelectedPathJsonDocument(
   path: SelectedPath,
   metadata?: GraphJsonMetadata,
   declareConstraints: readonly DeclareConstraint[] = [],
+  pathSearch?: PersistedPathSearchConfiguration,
 ): SelectedPathJsonDocument {
   const resolved = resolvePath(graph, path);
   const selectedNodeIds = new Set(resolved.nodeIds);
@@ -382,6 +472,7 @@ export function createSelectedPathJsonDocument(
     ...(declareConstraints.length > 0
       ? { declareConstraints: structuredClone(declareConstraints) }
       : {}),
+    ...(pathSearch ? { pathSearch: structuredClone(pathSearch) } : {}),
   }).document as SelectedPathJsonDocument;
 }
 

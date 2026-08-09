@@ -496,4 +496,109 @@ describe("Declare constraint persistence", () => {
     expect(document).not.toHaveProperty("declareConstraints");
     expect(parseGraphJsonValue(document).declareConstraints).toEqual([]);
   });
+});
+
+describe("path-search configuration persistence", () => {
+  const targetSearch = {
+    sourceNodeId: "0",
+    endpointMode: "specific-target" as const,
+    targetNodeId: "2",
+    requestedPathCount: 17,
+    maximumVisitsPerState: 3,
+    requireConstraintExercise: false,
+  };
+
+  it("round-trips target-specific search settings", () => {
+    const document = createGraphJsonDocument(
+      graph,
+      undefined,
+      [],
+      targetSearch,
+    );
+    const reparsed = parseGraphJsonText(serializeGraphJson(document));
+    expect(reparsed.pathSearch).toEqual(targetSearch);
+    expect(reparsed.document.pathSearch).toEqual(targetSearch);
   });
+
+  it("round-trips constraint-satisfaction settings without a target", () => {
+    const pathSearch = {
+      sourceNodeId: "1",
+      endpointMode: "constraint-satisfaction" as const,
+      requestedPathCount: 7,
+      maximumVisitsPerState: 2,
+      requireConstraintExercise: true,
+    };
+    const document = createGraphJsonDocument(graph, undefined, [], pathSearch);
+    expect(
+      parseGraphJsonText(serializeGraphJson(document)).pathSearch,
+    ).toEqual(pathSearch);
+  });
+
+  it("reads older documents without search settings", () => {
+    const result = parseGraphJsonValue({
+      nodes: graph.nodes,
+      edges: graph.edges,
+    });
+    expect(result.pathSearch).toBeNull();
+    expect(result.document).not.toHaveProperty("pathSearch");
+  });
+
+  it("rejects invalid modes, counts, and endpoint combinations", () => {
+    const base = { nodes: graph.nodes, edges: graph.edges };
+    expect(() =>
+      parseGraphJsonValue({
+        ...base,
+        pathSearch: { ...targetSearch, endpointMode: "other" },
+      }),
+    ).toThrow(/pathSearch\.endpointMode/);
+    expect(() =>
+      parseGraphJsonValue({
+        ...base,
+        pathSearch: { ...targetSearch, requestedPathCount: 0 },
+      }),
+    ).toThrow(/requestedPathCount must be a positive integer/);
+    expect(() =>
+      parseGraphJsonValue({
+        ...base,
+        pathSearch: { ...targetSearch, maximumVisitsPerState: 0 },
+      }),
+    ).toThrow(/maximumVisitsPerState must be a positive integer/);
+    expect(() =>
+      parseGraphJsonValue({
+        ...base,
+        pathSearch: {
+          ...targetSearch,
+          endpointMode: "constraint-satisfaction",
+        },
+      }),
+    ).toThrow(/targetNodeId must be omitted/);
+    expect(() =>
+      parseGraphJsonValue({
+        ...base,
+        pathSearch: {
+          sourceNodeId: targetSearch.sourceNodeId,
+          endpointMode: targetSearch.endpointMode,
+          requestedPathCount: targetSearch.requestedPathCount,
+          maximumVisitsPerState: targetSearch.maximumVisitsPerState,
+          requireConstraintExercise: targetSearch.requireConstraintExercise,
+        },
+      }),
+    ).toThrow(/targetNodeId must be a non-empty string/);
+  });
+
+  it("rejects search settings that reference unknown graph states", () => {
+    const base = { nodes: graph.nodes, edges: graph.edges };
+    expect(() =>
+      parseGraphJsonValue({
+        ...base,
+        pathSearch: { ...targetSearch, sourceNodeId: "missing" },
+      }),
+    ).toThrow(/sourceNodeId references missing state missing/);
+    expect(() =>
+      parseGraphJsonValue({
+        ...base,
+        pathSearch: { ...targetSearch, targetNodeId: "missing" },
+      }),
+    ).toThrow(/targetNodeId references missing state missing/);
+  });
+});

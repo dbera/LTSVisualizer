@@ -34,6 +34,7 @@ import {
   createSelectedPathJsonDocument,
   parseGraphJsonText,
   serializeGraphJson,
+  type PersistedPathSearchConfiguration,
 } from "./graph/graphJson";
 import { useGraphAnalysis } from "./graph/useGraphAnalysis";
 import { usePathSearch } from "./graph/usePathSearch";
@@ -660,6 +661,20 @@ function App() {
     URL.revokeObjectURL(url);
   }
 
+  function getPersistedPathSearchConfiguration(): PersistedPathSearchConfiguration {
+    const sourceNodeId = pathSearchSource.trim();
+    const targetNodeId = pathSearchTarget.trim();
+    return {
+      sourceNodeId,
+      endpointMode: targetNodeId
+        ? "specific-target"
+        : "constraint-satisfaction",
+      ...(targetNodeId ? { targetNodeId } : {}),
+      requestedPathCount,
+      maximumVisitsPerState,
+      requireConstraintExercise,
+    };
+  }
   function exportFullGraphJson() {
     const graph = graphRef.current;
     if (!graph) {
@@ -676,6 +691,7 @@ function App() {
         graph,
         { title: sourceName },
         declareConstraints,
+        getPersistedPathSearchConfiguration(),
       );
       const exportFileName = `${safeName}.json`;
 
@@ -1135,9 +1151,16 @@ function App() {
       const defaultPathState = graph.nodes.some((node) => node.id === "0")
         ? "0"
         : graph.nodes[0].id;
-      setPathSearchSource(defaultPathState);
-      setPathSearchTarget("");
-      setRequireConstraintExercise(true);
+      const importedPathSearch = parsed.pathSearch;
+      setPathSearchSource(importedPathSearch?.sourceNodeId ?? defaultPathState);
+      setPathSearchTarget(importedPathSearch?.targetNodeId ?? "");
+      setRequestedPathCount(importedPathSearch?.requestedPathCount ?? 5);
+      setMaximumVisitsPerState(
+        importedPathSearch?.maximumVisitsPerState ?? 1,
+      );
+      setRequireConstraintExercise(
+        importedPathSearch?.requireConstraintExercise ?? true,
+      );
 
       if (importedPath) {
         const resolved = resolvePath(graph, importedPath);
@@ -2179,7 +2202,7 @@ function App() {
                               >
                                 <span>Cyclic component {getCyclicComponentNumber(component.id)}</span>
                                 <small>
-                                  {component.nodeIds.length} states Â·{" "}
+                                  {component.nodeIds.length} states{" \u00b7 "}
                                   {component.internalEdgeIds.length} transitions
                                 </small>
                               </button>
@@ -2394,7 +2417,7 @@ function App() {
                                   <small>
                                     {path.edgeIds.length} transition
                                     {path.edgeIds.length === 1 ? "" : "s"}
-                                    {` Â· Ends at state ${
+                                    {` \u00b7 Ends at state ${
                                       path.endNodeId ??
                                       steps.at(-1)?.target ??
                                       path.startNodeId
@@ -2440,7 +2463,7 @@ function App() {
                                             >
                                               {step.source}
                                             </button>
-                                            <span aria-hidden="true">â†’</span>
+                                            <span aria-hidden="true">{"\u2192"}</span>
                                             <button
                                               type="button"
                                               onClick={() =>
