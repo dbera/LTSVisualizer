@@ -6,7 +6,6 @@ import type { DeclareTransition } from "./declarePredicates";
 import {
   createAlternatePrecedenceMonitor,
   createChainPrecedenceMonitor,
-  createNotAlternatePrecedenceMonitor,
   createNotChainPrecedenceMonitor,
   createNotPrecedenceMonitor,
   createPrecedenceMonitor,
@@ -68,7 +67,6 @@ const B = (id: number): DeclareTransition => ({
   outputs: { id },
 });
 const X: DeclareTransition = { transition: "X" };
-const C: DeclareTransition = { transition: "C" };
 
 describe("Precedence", () => {
   it("is vacuously satisfied when no target occurs", () => {
@@ -160,69 +158,24 @@ describe("Chain precedence", () => {
 });
 
 describe("Alternate precedence", () => {
-  it("requires an activation since the previous target", () => {
-    const monitor = createAlternatePrecedenceMonitor(
-      group("A"),
-      group("B"),
-      group("C"),
-    );
+  it("allows unrelated events and requires a fresh activation after the previous target", () => {
+    const monitor = createAlternatePrecedenceMonitor(group("A"), group("B"));
     expect(status(monitor, [{ transition: "A" }, X, { transition: "B" }]).accepting).toBe(true);
     expect(status(monitor, [{ transition: "A" }, { transition: "B" }, { transition: "B" }])).toEqual({
       viable: false,
       accepting: false,
     });
+    expect(status(monitor, [{ transition: "A" }, { transition: "B" }, { transition: "A" }, { transition: "B" }]).accepting).toBe(true);
   });
 
-  it("rejects the configured between predicate after the activation", () => {
-    const monitor = createAlternatePrecedenceMonitor(
-      group("A"),
-      group("B"),
-      group("C"),
-    );
-    expect(status(monitor, [{ transition: "A" }, C, { transition: "B" }])).toEqual({
-      viable: false,
-      accepting: false,
-    });
-  });
-
-  it("uses correlation for the preceding activation", () => {
+  it("uses a correlated activation since the previous target", () => {
     const monitor = createAlternatePrecedenceMonitor(
       correlatedActivation,
       group("B"),
-      group("C"),
       correlation,
     );
     expect(status(monitor, [A(10), B(10)]).accepting).toBe(true);
     expect(status(monitor, [A(10), B(20)])).toEqual({
-      viable: false,
-      accepting: false,
-    });
-  });
-});
-
-describe("Specialized negative alternate precedence", () => {
-  it("forbids A then B when only the allowed C predicate occurs between", () => {
-    const monitor = createNotAlternatePrecedenceMonitor(
-      group("A"),
-      group("B"),
-      group("C"),
-    );
-    expect(status(monitor, [{ transition: "A" }, C, { transition: "B" }])).toEqual({
-      viable: false,
-      accepting: false,
-    });
-    expect(status(monitor, [{ transition: "A" }, X, { transition: "B" }]).accepting).toBe(true);
-  });
-
-  it("applies correlation to the forbidden preceding activation", () => {
-    const monitor = createNotAlternatePrecedenceMonitor(
-      correlatedActivation,
-      group("B"),
-      group("C"),
-      correlation,
-    );
-    expect(status(monitor, [A(10), C, B(20)]).accepting).toBe(true);
-    expect(status(monitor, [A(10), C, B(10)])).toEqual({
       viable: false,
       accepting: false,
     });

@@ -469,14 +469,6 @@ function parseDeclareConstraint(
           target: parsePredicateGroup(constraint.target, `${location}.target`),
         }
       : {}),
-    ...(constraint.between !== undefined
-      ? {
-          between: parsePredicateGroup(
-            constraint.between,
-            `${location}.between`,
-          ),
-        }
-      : {}),
     ...(constraint.correlation !== undefined
       ? {
           correlation: parseCorrelationCondition(

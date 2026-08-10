@@ -6,7 +6,6 @@ import type { DeclareTransition } from "./declarePredicates";
 import {
   createAlternateResponseMonitor,
   createChainResponseMonitor,
-  createNotAlternateResponseMonitor,
   createNotChainResponseMonitor,
   createNotResponseMonitor,
   createResponseMonitor,
@@ -64,7 +63,6 @@ const B = (id: number): DeclareTransition => ({
   outputs: { id },
 });
 const X: DeclareTransition = { transition: "X" };
-const C: DeclareTransition = { transition: "C" };
 
 describe("Response", () => {
   it("is vacuously satisfied without activations", () => {
@@ -147,62 +145,42 @@ describe("Chain response", () => {
 });
 
 describe("Alternate response", () => {
-  it("requires a target before another activation", () => {
-    const monitor = createAlternateResponseMonitor(
-      group("A"),
-      group("B"),
-      group("C"),
-    );
+  it("allows unrelated events but rejects a second qualifying activation before the target", () => {
+    const monitor = createAlternateResponseMonitor(group("A"), group("B"));
     expect(status(monitor, [{ transition: "A" }, X, { transition: "B" }]).accepting).toBe(true);
-    expect(status(monitor, [{ transition: "A" }, { transition: "A" }])).toEqual({
+    expect(status(monitor, [{ transition: "A" }, { transition: "A" }, { transition: "B" }])).toEqual({
       viable: false,
       accepting: false,
     });
   });
 
-  it("rejects the configured between predicate while waiting", () => {
-    const monitor = createAlternateResponseMonitor(
-      group("A"),
-      group("B"),
-      group("C"),
-    );
-    expect(status(monitor, [{ transition: "A" }, C])).toEqual({
-      viable: false,
-      accepting: false,
-    });
+  it("uses the activation condition to decide whether a repeated activity qualifies", () => {
+    const activation = {
+      relation: "or" as const,
+      predicates: [{
+        transition: { operator: "equals" as const, value: "A" },
+        condition: {
+          type: "source" as const,
+          source: "inputs" as const,
+          condition: { type: "comparison" as const, path: ["qualifies"], operator: "=" as const, value: true },
+        },
+      }],
+    };
+    const monitor = createAlternateResponseMonitor(activation, group("B"));
+    expect(status(monitor, [
+      { transition: "A", inputs: { qualifies: true } },
+      { transition: "A", inputs: { qualifies: false } },
+      { transition: "B" },
+    ]).accepting).toBe(true);
   });
 
-  it("uses target correlation before fulfilling the activation", () => {
+  it("requires a correlated target", () => {
     const monitor = createAlternateResponseMonitor(
       correlatedActivation,
       group("B"),
-      group("C"),
       correlation,
     );
     expect(status(monitor, [A(10), B(20)]).accepting).toBe(false);
     expect(status(monitor, [A(10), B(10)]).accepting).toBe(true);
-  });
-});
-
-describe("Specialized negative alternate response", () => {
-  it("rejects A followed by B with only the allowed C predicate between", () => {
-    const monitor = createNotAlternateResponseMonitor(
-      group("A"),
-      group("B"),
-      group("C"),
-    );
-    expect(status(monitor, [{ transition: "A" }, C, { transition: "B" }]).accepting).toBe(false);
-    expect(status(monitor, [{ transition: "A" }, X, { transition: "B" }]).accepting).toBe(true);
-  });
-
-  it("applies correlation to the forbidden target", () => {
-    const monitor = createNotAlternateResponseMonitor(
-      correlatedActivation,
-      group("B"),
-      group("C"),
-      correlation,
-    );
-    expect(status(monitor, [A(10), C, B(20)]).accepting).toBe(true);
-    expect(status(monitor, [A(10), C, B(10)]).accepting).toBe(false);
   });
 });

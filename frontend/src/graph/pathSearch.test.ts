@@ -23,6 +23,13 @@ function searchInput(
   };
 }
 
+function groupForTest(name: string) {
+  return {
+    relation: "or" as const,
+    predicates: [{ transition: { operator: "equals" as const, value: name } }],
+  };
+}
+
 describe("findKShortestBoundedPaths", () => {
   it("finds a direct path", () => {
     const result = findKShortestBoundedPaths(
@@ -600,6 +607,46 @@ describe("findKShortestBoundedPaths", () => {
       });
     });
 
+    it("rejects vacuous target-specific paths when exercise is required", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "target"],
+        edges: [
+          { id: "x", source: "source", target: "target", transition: "X" },
+        ],
+        sourceNodeId: "source",
+        targetNodeId: "target",
+        endpointMode: "specific-target",
+        requireConstraintExercise: true,
+        requestedPathCount: 1,
+        maximumVisitsPerState: 1,
+        constraints: { declare: [responseConstraint] },
+      });
+
+      expect(result.paths).toEqual([]);
+    });
+
+    it("allows vacuous target-specific paths when exercise is disabled", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "target"],
+        edges: [
+          { id: "x", source: "source", target: "target", transition: "X" },
+        ],
+        sourceNodeId: "source",
+        targetNodeId: "target",
+        endpointMode: "specific-target",
+        requireConstraintExercise: false,
+        requestedPathCount: 1,
+        maximumVisitsPerState: 1,
+        constraints: { declare: [responseConstraint] },
+      });
+
+      expect(result.paths).toHaveLength(1);
+      expect(result.paths[0]).toMatchObject({
+        startNodeId: "source",
+        edgeIds: ["x"],
+      });
+    });
+
     it("rejects vacuous Response satisfaction when exercise is required", () => {
       const result = findKShortestBoundedPaths({
         nodeIds: ["source", "unrelated"],
@@ -834,6 +881,80 @@ describe("findKShortestBoundedPaths", () => {
       exercised: true,
       summary: "No forbidden correlated activation-target relationship occurred.",
     });
+  });
+
+  it("uses standard Alternate Response semantics during path search", () => {
+    const result = findKShortestBoundedPaths(searchInput(
+      ["0", "1", "2", "3", "4"],
+      [
+        { id: "a", source: "0", target: "1", transition: "A" },
+        { id: "x", source: "1", target: "2", transition: "X" },
+        { id: "b", source: "2", target: "4", transition: "B" },
+        { id: "a-again", source: "1", target: "3", transition: "A" },
+        { id: "b-late", source: "3", target: "4", transition: "B" },
+      ],
+      {
+        requestedPathCount: 5,
+        constraints: { declare: [{
+          id: "alternate-response",
+          template: "alternate-response",
+          enabled: true,
+          activation: groupForTest("A"),
+          target: groupForTest("B"),
+        }] },
+      },
+    ));
+    expect(result.paths.map((path) => path.edgeIds)).toEqual([["a", "x", "b"]]);
+  });
+
+  it("uses standard Alternate Precedence semantics during path search", () => {
+    const result = findKShortestBoundedPaths(searchInput(
+      ["0", "1", "2", "3", "4", "5"],
+      [
+        { id: "a", source: "0", target: "1", transition: "A" },
+        { id: "x", source: "1", target: "2", transition: "X" },
+        { id: "b", source: "2", target: "5", transition: "B" },
+        { id: "b-first", source: "1", target: "3", transition: "B" },
+        { id: "x2", source: "3", target: "4", transition: "X" },
+        { id: "b-second", source: "4", target: "5", transition: "B" },
+      ],
+      {
+        requestedPathCount: 5,
+        constraints: { declare: [{
+          id: "alternate-precedence",
+          template: "alternate-precedence",
+          enabled: true,
+          activation: groupForTest("A"),
+          target: groupForTest("B"),
+        }] },
+      },
+    ));
+    expect(result.paths.map((path) => path.edgeIds)).toEqual([["a", "x", "b"]]);
+  });
+
+  it("uses both standard Alternate Succession directions during path search", () => {
+    const result = findKShortestBoundedPaths(searchInput(
+      ["0", "1", "2", "3", "4", "5"],
+      [
+        { id: "a", source: "0", target: "1", transition: "A" },
+        { id: "x", source: "1", target: "2", transition: "X" },
+        { id: "b", source: "2", target: "5", transition: "B" },
+        { id: "b-first", source: "1", target: "3", transition: "B" },
+        { id: "x2", source: "3", target: "4", transition: "X" },
+        { id: "b-second", source: "4", target: "5", transition: "B" },
+      ],
+      {
+        requestedPathCount: 5,
+        constraints: { declare: [{
+          id: "alternate-succession",
+          template: "alternate-succession",
+          enabled: true,
+          activation: groupForTest("A"),
+          target: groupForTest("B"),
+        }] },
+      },
+    ));
+    expect(result.paths.map((path) => path.edgeIds)).toEqual([["a", "x", "b"]]);
   });
 
 });

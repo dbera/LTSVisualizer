@@ -412,17 +412,6 @@ function matchesCorrelation(
     activation.bindings,
   ).matches;
 }
-function betweenMatches(
-  constraint: DeclareConstraint,
-  edges: readonly PathSearchEdge[],
-  startStep: number,
-  endStep: number,
-): boolean {
-  if (!constraint.between) return false;
-  return edges.slice(startStep, endStep - 1).some((edge) =>
-    evaluateDeclarePredicateGroup(constraint.between!, edge).matches,
-  );
-}
 function explainConstraint(
   constraint: DeclareConstraint,
   edges: readonly PathSearchEdge[],
@@ -476,9 +465,7 @@ function explainConstraint(
             : target.stepNumber > activation.stepNumber;
           const chainOkay = !["chain-response", "chain-succession"].includes(constraint.template) ||
             target.stepNumber === activation.stepNumber + 1;
-          const alternateOkay = !["alternate-response", "alternate-succession"].includes(constraint.template) ||
-            !betweenMatches(constraint, edges, activation.stepNumber, target.stepNumber);
-          return orderOkay && chainOkay && alternateOkay &&
+          return orderOkay && chainOkay &&
             matchesCorrelation(constraint, activation, target);
         });
         if (fulfillment) events.push(event("fulfillment", fulfillment));
@@ -502,9 +489,7 @@ function explainConstraint(
           const orderOkay = activation.stepNumber < target.stepNumber;
           const chainOkay = constraint.template !== "chain-precedence" ||
             activation.stepNumber === target.stepNumber - 1;
-          const alternateOkay = constraint.template !== "alternate-precedence" ||
-            !betweenMatches(constraint, edges, activation.stepNumber, target.stepNumber);
-          return orderOkay && chainOkay && alternateOkay &&
+          return orderOkay && chainOkay &&
             matchesCorrelation(constraint, activation, target);
         });
         if (support) {
@@ -532,15 +517,12 @@ function explainConstraint(
     }
     case "not-response":
     case "not-chain-response":
-    case "not-alternate-response":
     case "not-precedence":
     case "not-chain-precedence":
-    case "not-alternate-precedence":
     case "not-responded-existence":
     case "not-coexistence":
     case "not-succession":
     case "not-chain-succession":
-    case "not-alternate-succession":
       events.push(...activations.map((match) => event("activation", match)));
       events.push(...targets.map((match) => event("target", match)));
       if (events[0]) events[0] = { ...events[0], role: "forbidden-pair-avoided" };
@@ -649,9 +631,7 @@ export function findKShortestBoundedPaths(
   const compiledConstraints = compileDeclareConstraints(declareConstraints);
   const edgesById = new Map(input.edges.map((edge) => [edge.id, edge]));
   const initialMonitorEntries = createMonitorSet(compiledConstraints);
-  const requireConstraintExercise =
-    endpointMode === "constraint-satisfaction" &&
-    (input.requireConstraintExercise ?? true);
+  const requireConstraintExercise = input.requireConstraintExercise ?? true;
 
   if (
     endpointMode === "constraint-satisfaction" &&

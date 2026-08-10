@@ -22,19 +22,16 @@ export type DeclareTemplateId =
   | "chain-response"
   | "not-chain-response"
   | "alternate-response"
-  | "not-alternate-response"
   | "precedence"
   | "not-precedence"
   | "chain-precedence"
   | "not-chain-precedence"
   | "alternate-precedence"
-  | "not-alternate-precedence"
   | "succession"
   | "not-succession"
   | "chain-succession"
   | "not-chain-succession"
-  | "alternate-succession"
-  | "not-alternate-succession";
+  | "alternate-succession";
 
 export type DeclareTemplateCategory =
   | "cardinality"
@@ -45,7 +42,7 @@ export type DeclareTemplateCategory =
   | "past"
   | "bidirectional";
 
-export type DeclarePredicateRole = "activation" | "target" | "between";
+export type DeclarePredicateRole = "activation" | "target";
 export type ActivityRelation = "and" | "or";
 
 export type TransitionNameMatcher = {
@@ -70,7 +67,6 @@ export type DeclareConstraint = {
   enabled: boolean;
   activation?: DeclarePredicateGroup;
   target?: DeclarePredicateGroup;
-  between?: DeclarePredicateGroup;
   correlation?: CorrelationCondition;
   count?: number;
 };
@@ -102,20 +98,17 @@ const DEFINITIONS: readonly DeclareTemplateDefinition[] = [
   { id: "not-response", displayName: "Not response", category: "future", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "No activation is followed later by a correlated target." },
   { id: "chain-response", displayName: "Chain response", category: "future", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "Every activation is immediately followed by a correlated target." },
   { id: "not-chain-response", displayName: "Not chain response", category: "future", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "No activation is immediately followed by a correlated target." },
-  { id: "alternate-response", displayName: "Alternate response", category: "future", requiredRoles: ["activation", "target", "between"], supportsCount: false, supportsCorrelation: true, description: "Every activation is followed by a correlated target without another qualifying activation or forbidden between event." },
-  { id: "not-alternate-response", displayName: "Not alternate response", category: "future", requiredRoles: ["activation", "target", "between"], supportsCount: false, supportsCorrelation: true, description: "Specialized negative alternate-response semantics." },
+  { id: "alternate-response", displayName: "Alternate response", category: "future", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "Every activation is followed by a correlated target before another qualifying activation occurs." },
   { id: "precedence", displayName: "Precedence", category: "past", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "Every target has a correlated activation before it." },
   { id: "not-precedence", displayName: "Not precedence", category: "past", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "No target has a correlated activation before it." },
   { id: "chain-precedence", displayName: "Chain precedence", category: "past", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "Every target is immediately preceded by a correlated activation." },
   { id: "not-chain-precedence", displayName: "Not chain precedence", category: "past", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "No target is immediately preceded by a correlated activation." },
-  { id: "alternate-precedence", displayName: "Alternate precedence", category: "past", requiredRoles: ["activation", "target", "between"], supportsCount: false, supportsCorrelation: true, description: "Every target has a correlated activation before it without another qualifying target or forbidden between event." },
-  { id: "not-alternate-precedence", displayName: "Not alternate precedence", category: "past", requiredRoles: ["activation", "target", "between"], supportsCount: false, supportsCorrelation: true, description: "Specialized negative alternate-precedence semantics." },
+  { id: "alternate-precedence", displayName: "Alternate precedence", category: "past", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "Every target has a correlated activation before it and after the previous qualifying target." },
   { id: "succession", displayName: "Succession", category: "bidirectional", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "Response and precedence both hold." },
   { id: "not-succession", displayName: "Not succession", category: "bidirectional", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "Negative succession semantics." },
   { id: "chain-succession", displayName: "Chain succession", category: "bidirectional", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "Chain response and chain precedence both hold." },
   { id: "not-chain-succession", displayName: "Not chain succession", category: "bidirectional", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "Negative chain-succession semantics." },
-  { id: "alternate-succession", displayName: "Alternate succession", category: "bidirectional", requiredRoles: ["activation", "target", "between"], supportsCount: false, supportsCorrelation: true, description: "Alternate response and alternate precedence both hold." },
-  { id: "not-alternate-succession", displayName: "Not alternate succession", category: "bidirectional", requiredRoles: ["activation", "target", "between"], supportsCount: false, supportsCorrelation: true, description: "Specialized negative alternate-succession semantics." },
+  { id: "alternate-succession", displayName: "Alternate succession", category: "bidirectional", requiredRoles: ["activation", "target"], supportsCount: false, supportsCorrelation: true, description: "Alternate response and alternate precedence both hold." },
 ] as const;
 
 export const DECLARE_TEMPLATE_DEFINITIONS: readonly DeclareTemplateDefinition[] =
@@ -187,7 +180,7 @@ export function validateDeclareConstraint(
     errors.push(`${definition.displayName} does not support correlation conditions.`);
   }
 
-  for (const role of ["activation", "target", "between"] as const) {
+  for (const role of ["activation", "target"] as const) {
     if (!definition.requiredRoles.includes(role) && constraint[role]) {
       errors.push(`${definition.displayName} does not use ${role}.`);
     }

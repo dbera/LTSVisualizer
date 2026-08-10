@@ -27,7 +27,6 @@ import {
 import {
   createAlternatePrecedenceMonitor,
   createChainPrecedenceMonitor,
-  createNotAlternatePrecedenceMonitor,
   createNotChainPrecedenceMonitor,
   createNotPrecedenceMonitor,
   createPrecedenceMonitor,
@@ -35,7 +34,6 @@ import {
 import {
   createAlternateResponseMonitor,
   createChainResponseMonitor,
-  createNotAlternateResponseMonitor,
   createNotChainResponseMonitor,
   createNotResponseMonitor,
   createResponseMonitor,
@@ -43,7 +41,6 @@ import {
 import {
   createAlternateSuccessionMonitor,
   createChainSuccessionMonitor,
-  createNotAlternateSuccessionMonitor,
   createNotChainSuccessionMonitor,
   createNotSuccessionMonitor,
   createSuccessionMonitor,
@@ -62,7 +59,7 @@ export type CompiledDeclareConstraint = {
 
 function requireGroup(
   constraint: DeclareConstraint,
-  role: "activation" | "target" | "between",
+  role: "activation" | "target",
 ): DeclarePredicateGroup {
   const group = constraint[role];
   if (!group) {
@@ -115,7 +112,6 @@ export function createDeclareMonitor(
 
   const activation = requireGroup(constraint, "activation");
   const target = () => requireGroup(constraint, "target");
-  const between = () => requireGroup(constraint, "between");
   const count = () => constraint.count ?? 0;
   const correlation = constraint.correlation;
 
@@ -165,19 +161,8 @@ export function createDeclareMonitor(
         correlation,
       );
     case "alternate-response":
-      return createAlternateResponseMonitor(
-        activation,
-        target(),
-        between(),
-        correlation,
-      );
-    case "not-alternate-response":
-      return createNotAlternateResponseMonitor(
-        activation,
-        target(),
-        between(),
-        correlation,
-      );
+      return createAlternateResponseMonitor(activation, target(), correlation);
+
     case "precedence":
       return createPrecedenceMonitor(activation, target(), correlation);
     case "not-precedence":
@@ -191,19 +176,8 @@ export function createDeclareMonitor(
         correlation,
       );
     case "alternate-precedence":
-      return createAlternatePrecedenceMonitor(
-        activation,
-        target(),
-        between(),
-        correlation,
-      );
-    case "not-alternate-precedence":
-      return createNotAlternatePrecedenceMonitor(
-        activation,
-        target(),
-        between(),
-        correlation,
-      );
+      return createAlternatePrecedenceMonitor(activation, target(), correlation);
+
     case "succession":
       return createSuccessionMonitor(activation, target(), correlation);
     case "not-succession":
@@ -217,19 +191,8 @@ export function createDeclareMonitor(
         correlation,
       );
     case "alternate-succession":
-      return createAlternateSuccessionMonitor(
-        activation,
-        target(),
-        between(),
-        correlation,
-      );
-    case "not-alternate-succession":
-      return createNotAlternateSuccessionMonitor(
-        activation,
-        target(),
-        between(),
-        correlation,
-      );
+      return createAlternateSuccessionMonitor(activation, target(), correlation);
+
   }
 }
 
@@ -270,14 +233,12 @@ function createExercisePolicy(constraint: DeclareConstraint): Pick<
     case "chain-precedence":
     case "not-chain-precedence":
     case "alternate-precedence":
-    case "not-alternate-precedence":
       return { requiresExercise: true, isExercisedBy: targetMatches };
     case "response":
     case "not-response":
     case "chain-response":
     case "not-chain-response":
     case "alternate-response":
-    case "not-alternate-response":
     case "responded-existence":
     case "not-responded-existence":
       return { requiresExercise: true, isExercisedBy: activationMatches };
@@ -290,7 +251,6 @@ function createExercisePolicy(constraint: DeclareConstraint): Pick<
     case "chain-succession":
     case "not-chain-succession":
     case "alternate-succession":
-    case "not-alternate-succession":
       return { requiresExercise: true, isExercisedBy: eitherMatches };
   }
 }

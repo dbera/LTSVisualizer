@@ -2365,8 +2365,9 @@ function App() {
                     </label>
                     <p className="path-search-help">
                       Without a target, paths may end at any state after all enabled
-                      constraints are satisfied. Exercise checking prevents vacuous
-                      matches where a constraint never participates.
+                      constraints are satisfied. When exercise checking is enabled,
+                      returned paths must exercise every enabled constraint that
+                      requires exercise.
                     </p>
                     <div className="path-search-number-row">
                       <div>
