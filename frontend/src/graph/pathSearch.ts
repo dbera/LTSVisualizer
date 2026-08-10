@@ -1,4 +1,6 @@
-import type { DeclareConstraint } from "./declareConstraints";
+import type { DeclareConstraint, DeclareTemplateId } from "./declareConstraints";
+import { evaluateDeclarePredicateGroup } from "./declarePredicates";
+import { evaluateCorrelationCondition, type ActivationBindings } from "./transitionCorrelation";
 import {
   advanceMonitorSet,
   createMonitorSet,
@@ -39,10 +41,34 @@ export type PathSearchInput = {
   constraints?: PathConstraints;
 };
 
+export type ConstraintExplanationEvent = {
+  role:
+    | "activation"
+    | "target"
+    | "fulfillment"
+    | "match"
+    | "preceding-support"
+    | "immediate-support"
+    | "position-match"
+    | "choice-match"
+    | "forbidden-pair-avoided";
+  stepNumber: number;
+  edgeId: string;
+  transition: string;
+};
+export type ConstraintExplanation = {
+  constraintId: string;
+  template: DeclareTemplateId;
+  status: "satisfied";
+  exercised: boolean;
+  summary: string;
+  events: ConstraintExplanationEvent[];
+};
 export type BoundedPath = {
   startNodeId: string;
   endNodeId?: string;
   edgeIds: string[];
+  explanations?: ConstraintExplanation[];
 };
 
 export type PathSearchStopReason =
@@ -343,6 +369,215 @@ function reconstructEdgeIds(candidate: SearchCandidate): string[] {
 function createPathKey(edgeIds: string[]): string {
   return JSON.stringify(edgeIds);
 }
+type IndexedPredicateMatch = {
+  stepNumber: number;
+  edge: PathSearchEdge;
+  bindings: ActivationBindings;
+};
+function predicateMatches(
+  group: DeclareConstraint["activation"],
+  edges: readonly PathSearchEdge[],
+): IndexedPredicateMatch[] {
+  if (!group) return [];
+  return edges.flatMap((edge, index) => {
+    const evaluation = evaluateDeclarePredicateGroup(group, edge);
+    return evaluation.matches
+      ? evaluation.predicateMatches.map((match) => ({
+          stepNumber: index + 1,
+          edge,
+          bindings: match.bindings,
+        }))
+      : [];
+  });
+}
+function event(
+  role: ConstraintExplanationEvent["role"],
+  match: IndexedPredicateMatch,
+): ConstraintExplanationEvent {
+  return {
+    role,
+    stepNumber: match.stepNumber,
+    edgeId: match.edge.id,
+    transition: match.edge.transition ?? match.edge.id,
+  };
+}
+function matchesCorrelation(
+  constraint: DeclareConstraint,
+  activation: IndexedPredicateMatch,
+  target: IndexedPredicateMatch,
+): boolean {
+  return !constraint.correlation || evaluateCorrelationCondition(
+    constraint.correlation,
+    target.edge,
+    activation.bindings,
+  ).matches;
+}
+function betweenMatches(
+  constraint: DeclareConstraint,
+  edges: readonly PathSearchEdge[],
+  startStep: number,
+  endStep: number,
+): boolean {
+  if (!constraint.between) return false;
+  return edges.slice(startStep, endStep - 1).some((edge) =>
+    evaluateDeclarePredicateGroup(constraint.between!, edge).matches,
+  );
+}
+function explainConstraint(
+  constraint: DeclareConstraint,
+  edges: readonly PathSearchEdge[],
+  compiled: CompiledDeclareConstraint,
+): ConstraintExplanation {
+  const activations = predicateMatches(constraint.activation, edges);
+  const targets = predicateMatches(constraint.target, edges);
+  const exercised = edges.some((edge) => compiled.isExercisedBy(edge));
+  const events: ConstraintExplanationEvent[] = [];
+  let summary: string;
+  switch (constraint.template) {
+    case "at-least":
+    case "at-most":
+    case "exactly":
+    case "exactly-consecutive":
+      events.push(...activations.map((match) => event("match", match)));
+      summary = constraint.template === "exactly-consecutive"
+        ? `Matched one consecutive run of ${activations.length}; required count ${constraint.count ?? 0}.`
+        : `Matched ${activations.length} time${activations.length === 1 ? "" : "s"}; required count ${constraint.count ?? 0}.`;
+      break;
+    case "init":
+      if (activations[0]) events.push(event("position-match", activations[0]));
+      summary = "The first transition matches the Init activation.";
+      break;
+    case "end": {
+      const last = activations.find((match) => match.stepNumber === edges.length);
+      if (last) events.push(event("position-match", last));
+      summary = "The final transition matches the End activation.";
+      break;
+    }
+    case "choice":
+    case "exclusive-choice":
+      events.push(...activations.map((match) => event("choice-match", match)));
+      events.push(...targets.map((match) => event("choice-match", match)));
+      summary = constraint.template === "choice"
+        ? `${activations.length > 0 ? "Activation" : "Target"} side occurred, satisfying Choice.`
+        : `Exactly one side occurred: ${activations.length > 0 ? "activation" : "target"}.`;
+      break;
+    case "response":
+    case "chain-response":
+    case "alternate-response":
+    case "responded-existence":
+    case "succession":
+    case "chain-succession":
+    case "alternate-succession": {
+      for (const activation of activations) {
+        events.push(event("activation", activation));
+        const fulfillment = targets.find((target) => {
+          const orderOkay = constraint.template === "responded-existence"
+            ? true
+            : target.stepNumber > activation.stepNumber;
+          const chainOkay = !["chain-response", "chain-succession"].includes(constraint.template) ||
+            target.stepNumber === activation.stepNumber + 1;
+          const alternateOkay = !["alternate-response", "alternate-succession"].includes(constraint.template) ||
+            !betweenMatches(constraint, edges, activation.stepNumber, target.stepNumber);
+          return orderOkay && chainOkay && alternateOkay &&
+            matchesCorrelation(constraint, activation, target);
+        });
+        if (fulfillment) events.push(event("fulfillment", fulfillment));
+      }
+      if (constraint.template.includes("succession")) {
+        summary = activations.length === 0 && targets.length === 0
+          ? "Satisfied vacuously: neither side occurred."
+          : `${activations.length} activation${activations.length === 1 ? "" : "s"} fulfilled, and every target had the required preceding activation.`;
+      } else {
+        summary = activations.length === 0
+          ? "Satisfied vacuously: no matching activation occurred."
+          : `${activations.length} activation${activations.length === 1 ? "" : "s"} fulfilled.`;
+      }
+      break;
+    }
+    case "precedence":
+    case "chain-precedence":
+    case "alternate-precedence": {
+      for (const target of targets) {
+        const support = [...activations].reverse().find((activation) => {
+          const orderOkay = activation.stepNumber < target.stepNumber;
+          const chainOkay = constraint.template !== "chain-precedence" ||
+            activation.stepNumber === target.stepNumber - 1;
+          const alternateOkay = constraint.template !== "alternate-precedence" ||
+            !betweenMatches(constraint, edges, activation.stepNumber, target.stepNumber);
+          return orderOkay && chainOkay && alternateOkay &&
+            matchesCorrelation(constraint, activation, target);
+        });
+        if (support) {
+          events.push(event(
+            constraint.template === "chain-precedence"
+              ? "immediate-support"
+              : "preceding-support",
+            support,
+          ));
+        }
+        events.push(event("target", target));
+      }
+      summary = targets.length === 0
+        ? "Satisfied vacuously: no matching target occurred."
+        : `Every target had ${constraint.template === "chain-precedence" ? "an immediate" : "a qualifying"} preceding activation.`;
+      break;
+    }
+    case "coexistence": {
+      events.push(...activations.map((match) => event("activation", match)));
+      events.push(...targets.map((match) => event("target", match)));
+      summary = activations.length === 0 && targets.length === 0
+        ? "Satisfied vacuously: neither side occurred."
+        : "Activation and target both occurred with correlated counterparts.";
+      break;
+    }
+    case "not-response":
+    case "not-chain-response":
+    case "not-alternate-response":
+    case "not-precedence":
+    case "not-chain-precedence":
+    case "not-alternate-precedence":
+    case "not-responded-existence":
+    case "not-coexistence":
+    case "not-succession":
+    case "not-chain-succession":
+    case "not-alternate-succession":
+      events.push(...activations.map((match) => event("activation", match)));
+      events.push(...targets.map((match) => event("target", match)));
+      if (events[0]) events[0] = { ...events[0], role: "forbidden-pair-avoided" };
+      summary = activations.length === 0 && targets.length === 0
+        ? "Satisfied vacuously: neither constrained event occurred."
+        : "No forbidden correlated activation-target relationship occurred.";
+      break;
+  }
+  return {
+    constraintId: constraint.id,
+    template: constraint.template,
+    status: "satisfied",
+    exercised,
+    summary,
+    events,
+  };
+}
+function explainAcceptedPath(
+  edgeIds: readonly string[],
+  edgesById: ReadonlyMap<string, PathSearchEdge>,
+  constraints: readonly DeclareConstraint[],
+  compiledConstraints: readonly CompiledDeclareConstraint[],
+): ConstraintExplanation[] {
+  const edges = edgeIds.map((edgeId) => {
+    const edge = edgesById.get(edgeId);
+    if (!edge) throw new Error(`Cannot explain unknown edge ${edgeId}.`);
+    return edge;
+  });
+  const compiledById = new Map(compiledConstraints.map((item) => [item.id, item]));
+  return constraints
+    .filter((constraint) => constraint.enabled)
+    .map((constraint) => {
+      const compiled = compiledById.get(constraint.id);
+      if (!compiled) throw new Error(`Cannot explain uncompiled constraint ${constraint.id}.`);
+      return explainConstraint(constraint, edges, compiled);
+    });
+}
 
 function resolveEndpointMode(input: PathSearchInput): PathSearchEndpointMode {
   return input.endpointMode ??
@@ -410,9 +645,9 @@ export function findKShortestBoundedPaths(
     "Maximum queued candidates",
   );
 
-  const compiledConstraints = compileDeclareConstraints(
-    input.constraints?.declare ?? [],
-  );
+  const declareConstraints = input.constraints?.declare ?? [];
+  const compiledConstraints = compileDeclareConstraints(declareConstraints);
+  const edgesById = new Map(input.edges.map((edge) => [edge.id, edge]));
   const initialMonitorEntries = createMonitorSet(compiledConstraints);
   const requireConstraintExercise =
     endpointMode === "constraint-satisfaction" &&
@@ -497,6 +732,16 @@ export function findKShortestBoundedPaths(
               ? { endNodeId: candidate.currentNodeId }
               : {}),
             edgeIds,
+            ...(compiledConstraints.length > 0
+              ? {
+                  explanations: explainAcceptedPath(
+                    edgeIds,
+                    edgesById,
+                    declareConstraints,
+                    compiledConstraints,
+                  ),
+                }
+              : {}),
           });
         }
 

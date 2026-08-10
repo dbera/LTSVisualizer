@@ -38,7 +38,7 @@ import {
 } from "./graph/graphJson";
 import { useGraphAnalysis } from "./graph/useGraphAnalysis";
 import { usePathSearch } from "./graph/usePathSearch";
-import type { BoundedPath } from "./graph/pathSearch";
+import type { BoundedPath, ConstraintExplanationEvent } from "./graph/pathSearch";
 import type { StronglyConnectedComponent } from "./graph/graphAnalysis";
 import { buildTransitionCatalogue } from "./graph/transitionCatalog";
 import { buildTransitionDataCatalogue } from "./graph/transitionDataCatalogue";
@@ -1716,6 +1716,15 @@ function App() {
     setStatus(`Focused state ${nodeId}`);
   }
 
+  function focusExplanationEvent(
+    explanationEvent: ConstraintExplanationEvent,
+    pathIndex: number,
+  ) {
+    focusComputedPathEdge(
+      explanationEvent.edgeId,
+      `explanation-${pathIndex}-${explanationEvent.stepNumber}-${explanationEvent.edgeId}`,
+    );
+  }
   function getComputedPathSteps(path: BoundedPath) {
     const graph = graphRef.current;
     if (!graph) return [];
@@ -2424,6 +2433,46 @@ function App() {
                                     }`}
                                   </small>
                                 </button>
+                                {(path.explanations?.length ?? 0) > 0 && (
+                                  <details className="computed-path-explanations">
+                                    <summary>Why this path satisfies the constraints</summary>
+                                    <div className="constraint-explanation-list">
+                                      {path.explanations?.map((explanation) => (
+                                        <section
+                                          key={explanation.constraintId}
+                                          className="constraint-explanation"
+                                        >
+                                          <div className="constraint-explanation-heading">
+                                            <strong>{explanation.constraintId}</strong>
+                                            <span>Satisfied</span>
+                                          </div>
+                                          <small>{explanation.template}</small>
+                                          <p>{explanation.summary}</p>
+                                          <p className="constraint-exercise-status">
+                                            {explanation.exercised
+                                              ? "Constraint was exercised by this path."
+                                              : "Constraint was satisfied without an exercise event."}
+                                          </p>
+                                          {explanation.events.length > 0 && (
+                                            <ol>
+                                              {explanation.events.map((explanationEvent, eventIndex) => (
+                                                <li key={`${explanationEvent.role}-${explanationEvent.stepNumber}-${explanationEvent.edgeId}-${eventIndex}`}>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => focusExplanationEvent(explanationEvent, index)}
+                                                  >
+                                                    {explanationEvent.role}: step {explanationEvent.stepNumber}{" "}
+                                                    {explanationEvent.transition} ({explanationEvent.edgeId})
+                                                  </button>
+                                                </li>
+                                              ))}
+                                            </ol>
+                                          )}
+                                        </section>
+                                      ))}
+                                    </div>
+                                  </details>
+                                )}
                                 <details className="computed-path-details">
                                   <summary>Show transition details</summary>
                                   {steps.length === 0 ? (
