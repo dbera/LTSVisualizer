@@ -768,11 +768,22 @@ function App() {
     }
   }
 
+  function leaveComputedPathView() {
+    if (!computedPathViewActive) {
+      return;
+    }
+
+    setShownSearchPathIndex(null);
+    setFocusedComputedStepKey(null);
+    setComputedPathViewActive(false);
+    graphViewBeforeComputedPathRef.current = null;
+  }
   function showNeighborhood(
     stateId: string,
     hops: number,
     layout: OverviewLayout = overviewLayout
   ) {
+    leaveComputedPathView();
     const graph = graphRef.current;
 
     if (!graph) {
@@ -848,6 +859,8 @@ function App() {
   }
 
   function showAll(layout: OverviewLayout = overviewLayout) {
+    leaveComputedPathView();
+
     const graph = graphRef.current;
 
     if (!graph) {
@@ -886,8 +899,55 @@ function App() {
     }
   }
 
+
   function changeOverviewLayout(layout: OverviewLayout) {
     setOverviewLayout(layout);
+
+    if (computedPathViewActive) {
+      const cy = cyRef.current;
+
+      if (!cy || cy.elements().empty()) {
+        return;
+      }
+
+      cy.nodes().unlock();
+      cy.nodes().grabify();
+
+      if (layout === "hierarchical") {
+        cy.layout({
+          name: "breadthfirst",
+          directed: true,
+          fit: false,
+          padding: 60,
+          spacingFactor: 1.8,
+          circle: false,
+          grid: false,
+        }).run();
+      } else {
+        cy.layout({
+          name: "grid",
+          fit: false,
+          padding: 60,
+          avoidOverlap: true,
+          avoidOverlapPadding: 16,
+          condense: false,
+          cols: Math.ceil(Math.sqrt(cy.nodes().length)),
+        }).run();
+      }
+
+      window.requestAnimationFrame(() => {
+        cy.resize();
+        cy.fit(cy.elements(), 60);
+      });
+
+      setStatus(
+        `Applied ${
+          layout === "hierarchical" ? "hierarchical" : "grid"
+        } layout to the displayed computed path`,
+      );
+
+      return;
+    }
 
     if (showingAll) {
       showAll(layout);
