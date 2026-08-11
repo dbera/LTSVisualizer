@@ -116,8 +116,8 @@ type SearchCandidate = {
   advancedMonitorCount?: number;
 };
 
-const DEFAULT_MAXIMUM_EXPANDED_CANDIDATES = 1_000_000;
-const DEFAULT_MAXIMUM_QUEUED_CANDIDATES = 100_000;
+const DEFAULT_MAXIMUM_EXPANDED_CANDIDATES = 9_000_000;
+const DEFAULT_MAXIMUM_QUEUED_CANDIDATES = 900_000;
 
 class CandidateMinHeap {
   private readonly items: SearchCandidate[] = [];
@@ -689,7 +689,8 @@ export function findKShortestBoundedPaths(
   const initialMonitorEntries = createMonitorSet(compiledConstraints);
   const requireConstraintExercise = input.requireConstraintExercise ?? true;
   const strategy = input.strategy ?? "shortest";
-  const effectiveRequestedPathCount = strategy === "any-witness" ? 1 : input.requestedPathCount;
+  // const effectiveRequestedPathCount = strategy === "any-witness" ? 1 : input.requestedPathCount;
+  const effectiveRequestedPathCount = input.requestedPathCount;
   const initialMonitorStateKeys = initialMonitorEntries.map((entry) =>
     entry.monitor.stateKey(entry.state),
   );

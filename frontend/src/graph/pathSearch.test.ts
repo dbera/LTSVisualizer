@@ -957,4 +957,204 @@ describe("findKShortestBoundedPaths", () => {
     expect(result.paths.map((path) => path.edgeIds)).toEqual([["a", "x", "b"]]);
   });
 
+
+  describe("any-witness multiple-path and loop behavior", () => {
+    const atLeastOneA = {
+      id: "at-least-one-a",
+      template: "at-least" as const,
+      enabled: true,
+      count: 1,
+      activation: groupForTest("A"),
+    };
+
+    it("honors the requested path count in any-witness mode", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "one", "two", "three", "four"],
+        edges: [
+          { id: "a-1", source: "source", target: "one", transition: "A" },
+          { id: "a-2", source: "source", target: "two", transition: "A" },
+          { id: "a-3", source: "source", target: "three", transition: "A" },
+          { id: "a-4", source: "source", target: "four", transition: "A" },
+        ],
+        sourceNodeId: "source",
+        endpointMode: "constraint-satisfaction",
+        strategy: "any-witness",
+        requestedPathCount: 3,
+        maximumVisitsPerState: 1,
+        constraints: { declare: [atLeastOneA] },
+      });
+
+      expect(result.paths.map((path) => path.edgeIds)).toEqual([
+        ["a-1"],
+        ["a-2"],
+        ["a-3"],
+      ]);
+      expect(result.stopReason).toBe("requested-count-reached");
+      expect(result.exhausted).toBe(false);
+    });
+
+    it("returns fewer witnesses when the bounded search space is exhausted", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "one", "two"],
+        edges: [
+          { id: "a-1", source: "source", target: "one", transition: "A" },
+          { id: "a-2", source: "source", target: "two", transition: "A" },
+        ],
+        sourceNodeId: "source",
+        endpointMode: "constraint-satisfaction",
+        strategy: "any-witness",
+        requestedPathCount: 5,
+        maximumVisitsPerState: 1,
+        constraints: { declare: [atLeastOneA] },
+      });
+
+      expect(result.paths.map((path) => path.edgeIds)).toEqual([
+        ["a-1"],
+        ["a-2"],
+      ]);
+      expect(result.stopReason).toBe("exhausted");
+      expect(result.exhausted).toBe(true);
+    });
+
+    it("keeps parallel-edge witnesses distinct by ordered edge ID", () => {
+      const input: PathSearchInput = {
+        nodeIds: ["source", "target"],
+        edges: [
+          { id: "a-primary", source: "source", target: "target", transition: "A" },
+          { id: "a-alternative", source: "source", target: "target", transition: "A" },
+        ],
+        sourceNodeId: "source",
+        targetNodeId: "target",
+        endpointMode: "specific-target",
+        strategy: "any-witness",
+        requestedPathCount: 2,
+        maximumVisitsPerState: 1,
+        constraints: { declare: [atLeastOneA] },
+      };
+
+      const first = findKShortestBoundedPaths(input);
+      const second = findKShortestBoundedPaths(input);
+
+      expect(first.paths.map((path) => path.edgeIds)).toEqual([
+        ["a-primary"],
+        ["a-alternative"],
+      ]);
+      expect(second).toEqual(first);
+    });
+
+    it("rejects a loop-dependent witness when visits per state is one", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "middle", "target"],
+        edges: [
+          { id: "first-a", source: "source", target: "middle", transition: "A" },
+          { id: "return", source: "middle", target: "source", transition: "X" },
+          { id: "second-a", source: "source", target: "target", transition: "A" },
+        ],
+        sourceNodeId: "source",
+        targetNodeId: "target",
+        endpointMode: "specific-target",
+        strategy: "any-witness",
+        requestedPathCount: 1,
+        maximumVisitsPerState: 1,
+        constraints: {
+          declare: [{
+            ...atLeastOneA,
+            id: "at-least-two-a",
+            count: 2,
+          }],
+        },
+      });
+
+      expect(result.paths).toEqual([]);
+      expect(result.stopReason).toBe("exhausted");
+    });
+
+    it("accepts the same loop-dependent witness when visits per state is two", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "middle", "target"],
+        edges: [
+          { id: "first-a", source: "source", target: "middle", transition: "A" },
+          { id: "return", source: "middle", target: "source", transition: "X" },
+          { id: "second-a", source: "source", target: "target", transition: "A" },
+        ],
+        sourceNodeId: "source",
+        targetNodeId: "target",
+        endpointMode: "specific-target",
+        strategy: "any-witness",
+        requestedPathCount: 1,
+        maximumVisitsPerState: 2,
+        constraints: {
+          declare: [{
+            ...atLeastOneA,
+            id: "at-least-two-a",
+            count: 2,
+          }],
+        },
+      });
+
+      expect(result.paths).toHaveLength(1);
+      expect(result.paths[0]).toMatchObject({
+        startNodeId: "source",
+        edgeIds: ["first-a", "return", "second-a"],
+      });
+      expect(result.stopReason).toBe("requested-count-reached");
+    });
+
+    it("applies the visit bound to self-loops in any-witness mode", () => {
+      const baseInput: PathSearchInput = {
+        nodeIds: ["source", "target"],
+        edges: [
+          { id: "loop-a", source: "source", target: "source", transition: "A" },
+          { id: "exit-a", source: "source", target: "target", transition: "A" },
+        ],
+        sourceNodeId: "source",
+        endpointMode: "constraint-satisfaction",
+        strategy: "any-witness",
+        requestedPathCount: 1,
+        maximumVisitsPerState: 1,
+        constraints: {
+          declare: [{
+            ...atLeastOneA,
+            id: "at-least-two-a",
+            count: 2,
+          }],
+        },
+      };
+
+      const loopless = findKShortestBoundedPaths(baseInput);
+      const oneSelfLoopAllowed = findKShortestBoundedPaths({
+        ...baseInput,
+        maximumVisitsPerState: 2,
+      });
+
+      expect(loopless.paths).toEqual([]);
+      expect(oneSelfLoopAllowed.paths[0]).toMatchObject({
+        startNodeId: "source",
+        endNodeId: "target",
+        edgeIds: ["loop-a", "exit-a"],
+      });
+    });
+
+    it("does not change deterministic shortest-first behavior", () => {
+      const result = findKShortestBoundedPaths(
+        searchInput(
+          ["source", "near", "far-1", "far-2", "target"],
+          [
+            { id: "far-start", source: "source", target: "far-1" },
+            { id: "far-middle", source: "far-1", target: "far-2" },
+            { id: "far-end", source: "far-2", target: "target" },
+            { id: "near-start", source: "source", target: "near" },
+            { id: "near-end", source: "near", target: "target" },
+          ],
+          { strategy: "shortest", requestedPathCount: 2 },
+        ),
+      );
+
+      expect(result.paths.map((path) => path.edgeIds)).toEqual([
+        ["near-start", "near-end"],
+        ["far-start", "far-middle", "far-end"],
+      ]);
+    });
+  });
+
 });
