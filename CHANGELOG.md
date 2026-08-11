@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased](https://github.com/dbera/LTSVisualizer/compare/v0.5.0...HEAD)
 
+### Added
+- Added structured explanations for accepted Declare-constrained paths, including constraint ID, template, satisfaction summary, exercised or vacuous status, one-based path steps, transition names, and exact edge IDs.
+- Added expandable **Why this path satisfies the constraints** sections below computed paths.
+- Added clickable explanation evidence that focuses the corresponding transition and displays its inputs and outputs in the Inspector.
+- Added accepted-path replay for explanation generation so queued search candidates do not carry explanation histories.
+- Added persistence of Declare constraints in complete-graph and selected-path JSON documents.
+- Added persistence of path-search source, endpoint mode, optional target, requested path count, maximum visits per state, and exercise requirement in complete-graph JSON documents.
+- Added import validation for persisted template IDs, nested predicates, activation captures, correlations, duplicate constraint IDs, state references, endpoint combinations, path counts, and visit limits.
+- Added regression tests for explanation payloads, persisted constraints and search settings, standard Alternate semantics, and exercise enforcement in target-specific searches.
+
+### Changed
+- Updated the positive Alternate family to standard two-operand Declare/MP-Declare semantics.
+- Changed **Alternate response** so unrelated events are allowed between a qualifying activation and correlated target, while another qualifying activation before fulfillment violates the constraint.
+- Changed **Alternate precedence** so each qualifying target requires a correlated activation since the previous qualifying target.
+- Changed **Alternate succession** to compose the corrected Alternate response and Alternate precedence semantics.
+- Removed the non-standard `between` predicate role from the constraint model, builder, JSON parser, monitor factory, path explanations, and tests.
+- Reduced the supported template catalogue from 30 to 27 templates after removing the three non-standard negative Alternate variants.
+- Applied **Require constraints to be exercised** consistently to both target-specific and target-free constrained searches.
+- Updated exercise help text to clarify that enabled exercise checking excludes vacuously satisfied paths in either endpoint mode.
+- Restored persisted Declare constraints and search settings when reopening graph JSON; computed paths and explanations remain runtime-only and are reconstructed by rerunning search.
+
+### Removed
+- Removed **Not alternate response**, **Not alternate precedence**, and **Not alternate succession** because their former specialized interval semantics were not standard Declare/MP-Declare templates.
+
+### Fixed
+- Fixed target-specific searches ignoring the checked **Require constraints to be exercised** option.
+- Fixed positive Alternate templates rejecting arbitrary configured `between` events instead of only enforcing standard alternation between qualifying activation and target events.
+- Fixed documentation that described the removed negative Alternate templates and obsolete third Alternate operand.
+
 ## [0.5.0](https://github.com/dbera/LTSVisualizer/compare/v0.4.0...v0.5.0) - 2026-08-08
 
 ### Added

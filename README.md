@@ -126,7 +126,7 @@ Path-search results are kept in browser memory for the currently loaded graph an
 
 - Add one or more Declare constraints to bounded path search.
 - Enable or disable individual constraints without deleting their configuration.
-- Match activation, target, and where applicable between events by transition name and structured transition data.
+- Match activation and target events by transition name and structured transition data.
 - Build transition pickers and data-field choices from the currently loaded graph.
 - Evaluate transition `inputs` and `outputs` during search rather than only matching transition labels.
 - Combine multiple conditions within one predicate using AND semantics.
@@ -135,11 +135,14 @@ Path-search results are kept in browser memory for the currently loaded graph an
 - Traverse nested objects, arrays of objects, and arrays of primitive values.
 - Configure every array level independently as an existential item match (`[*]`) or a fixed zero-based index such as `[2]`.
 - Combine existential and indexed traversal at arbitrary multidimensional depth.
+- Capture values from qualifying activation events and correlate them with structured target data.
 - Search either toward a required target state or for a constraint-satisfying path without a fixed target.
+- Optionally require every applicable enabled constraint to be exercised, excluding paths that satisfy only vacuously.
+- Apply exercise checking consistently to target-specific and target-free searches.
 - Run constrained searches in the existing path-search worker with cancellation, stale-result protection, bounded revisits, deterministic shortest-first results, and parallel-edge identity.
 - Use the same constrained-search functionality in hosted and offline `file:///` builds.
 
-All enabled constraints must be satisfied by a returned path. Disabling a constraint excludes it from evaluation but keeps it available for later reuse.
+All enabled constraints must be satisfied by a returned path. Disabling a constraint excludes it from evaluation but keeps it available for later reuse. Vacuous satisfaction remains part of Declare semantics; **Require constraints to be exercised** can be used when returned paths must demonstrate participating constraint events.
 
 #### Supported Declare templates
 
@@ -149,11 +152,18 @@ The constraint builder groups templates by purpose:
 - **Position:** Init, End
 - **Choice:** Choice, Exclusive choice
 - **Existence:** Responded existence, Not responded existence, Coexistence, Not coexistence
-- **Future:** Response, Not response, Chain response, Not chain response, Alternate response, Not alternate response
-- **Past:** Precedence, Not precedence, Chain precedence, Not chain precedence, Alternate precedence, Not alternate precedence
-- **Bidirectional:** Succession, Not succession, Chain succession, Not chain succession, Alternate succession, Not alternate succession
+- **Future:** Response, Not response, Chain response, Not chain response, Alternate response
+- **Past:** Precedence, Not precedence, Chain precedence, Not chain precedence, Alternate precedence
+- **Bidirectional:** Succession, Not succession, Chain succession, Not chain succession, Alternate succession
 
-The selected template determines which predicate roles are required. Cardinality templates require a non-negative count. Alternate templates also expose a between predicate. Templates that support correlation can relate data captured by an activation to data on a target.
+The 27 supported templates determine which predicate roles are required. Cardinality templates require a non-negative count. Templates that support correlation can relate data captured by an activation to data on a target.
+
+The positive Alternate family follows standard Declare/MP-Declare semantics:
+- **Alternate response:** every qualifying activation must receive a correlated later target before another qualifying activation occurs.
+- **Alternate precedence:** every qualifying target must have a correlated activation since the previous qualifying target.
+- **Alternate succession:** both Alternate response and Alternate precedence must hold.
+
+Unrelated transitions are allowed between the paired events. A transition with the same name interrupts alternation only when it also satisfies the relevant data predicate. Alternate templates use two operands; there is no third `between` predicate.
 
 #### Transition-data conditions
 
@@ -177,6 +187,29 @@ Array access is configured per level:
 For example, `outputs.tensor[*].rows[2].cells[*].enabled` matches any tensor item whose third row contains a cell with a matching `enabled` value.
 
 Existence operators test whether the configured path can be resolved. Other operators compare the resolved value with the typed value configured in the editor.
+
+#### Path explanations
+
+Each accepted constrained path can show **Why this path satisfies the constraints**. Explanations include:
+- The constraint ID and template.
+- A satisfaction summary.
+- Whether the constraint was exercised or satisfied vacuously.
+- Supporting transition events with one-based path steps, transition names, and exact edge IDs.
+- Clickable evidence that focuses the corresponding transition and opens its data in the Inspector.
+
+Constraint monitors remain authoritative for path pruning and acceptance. Explanation evidence is reconstructed only after a path has been accepted, avoiding explanation histories on every queued search candidate.
+
+#### Persisted Declare search configuration
+
+Complete-graph JSON exports preserve:
+- Configured Declare constraints and their enabled state.
+- Nested transition-data conditions, activation captures, and target correlations.
+- Source state and endpoint mode.
+- Optional target state.
+- Requested path count and maximum visits per state.
+- The **Require constraints to be exercised** setting.
+
+Reopening the exported graph restores the configuration. Computed paths and explanations are intentionally not persisted; rerunning the search reconstructs them from the restored graph and constraint specification. Selected-path JSON exports preserve the configured Declare constraints but do not persist computed explanation results.
 
 ### Manual path selection
 
@@ -500,11 +533,13 @@ Paths are ordered by transition count and are unique by ordered edge IDs. If sou
 3. Enter a target state ID when the path must end at a particular state, or leave the target empty to search for a constraint-satisfying path without a fixed destination.
 4. Choose the requested number of paths and set **Visits per state**.
 5. In the Declare constraints section, select **Add constraint**.
-6. Choose a Declare template and configure its required activation, target, and where applicable between transitions.
+6. Choose a Declare template and configure its required activation and, where applicable, target transition.
 7. For a transition-data predicate, select **Add condition**, choose an input or output field, configure each array-access level, select an operator, and provide a typed value when required.
-8. Add further conditions or constraints as needed. Conditions within a predicate and enabled constraints in the search are combined conjunctively.
-9. Select **Find paths**. Invalid or incomplete constraints are reported before search starts.
-10. Select a result to visualize, inspect, or export it using the normal computed-path controls.
+8. Configure activation captures and target correlation when events must refer to the same data item.
+9. Add further conditions or constraints as needed. Conditions within a predicate and enabled constraints in the search are combined conjunctively.
+10. Enable **Require constraints to be exercised** when vacuously satisfied paths should be excluded.
+11. Select **Find paths**. Invalid or incomplete constraints are reported before search starts.
+12. Expand **Why this path satisfies the constraints** to inspect the evidence, or select a result to visualize and export it using the normal computed-path controls.
 
 Use the enable control to temporarily exclude a constraint while preserving its configuration. Changing a constraint invalidates earlier search results because those results were computed under a different search specification.
 
@@ -513,6 +548,8 @@ Use the enable control to temporarily exclude a constraint while preserving its 
 With a target state, a result must reach that state and satisfy every enabled constraint when the path is completed.
 
 Without a target state, the search may return a path as soon as the enabled monitors consider the path complete and accepting. This is useful when the required behavior matters more than a particular destination state.
+
+Some Declare templates are satisfied vacuously when no qualifying activation occurs. When **Require constraints to be exercised** is enabled, every applicable enabled constraint must participate in the returned path. This rule applies both with and without a target state. When the option is disabled, shorter vacuously satisfying paths may enter the top-K results and displace longer exercised paths because results remain ordered by transition count.
 
 ### Select a path
 
@@ -582,7 +619,7 @@ Select **Export graph JSON** to export every state and transition in the loaded 
 - Whether **Show all** is active
 - The selected path
 
-The export preserves all unique states and transitions, parallel edges, semantic data, labels, colors, and graph counts. Its filename is derived safely from the opened JSON filename.
+The export preserves all unique states and transitions, parallel edges, semantic data, labels, colors, graph counts, configured Declare constraints, and path-search settings. Its filename is derived safely from the opened JSON filename. Computed search results and explanations are not persisted.
 
 A complete graph export has document type `graph` and includes counts in its metadata:
 
@@ -617,7 +654,9 @@ React and TypeScript application
         |-- Structured semantic-data inspection
         |-- On-demand terminal-state and SCC analysis
         |   `-- Inline Web Worker with cancellation
-        |-- Bounded alternative path search
+        |-- Bounded alternative and Declare-constrained path search
+        |   |-- Incremental Declare monitors and exercise tracking
+        |   |-- Accepted-path explanation replay
         |   `-- Reverse-distance-guided inline Web Worker with cancellation
         |-- Manual path selection
         |-- Complete-graph JSON export
@@ -726,7 +765,7 @@ npm run build
 npm run build:offline
 ```
 
-The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, manual and computed path selection, loops, repeated states, bounded revisits, source-equals-target paths, self-loops, parallel edges, deterministic shortest-first ordering, reverse-distance pruning, resource safeguards, Declare constraint validation and monitor semantics, transition-data predicates and correlation, optional-target constrained search, nested and multidimensional array conditions, typed condition values, side-panel state, selected-path export, semantic data, PlantUML path export, terminal-state detection, iterative SCC computation, large synthetic graph topologies, and worker-controller lifecycle behavior.
+The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, manual and computed path selection, loops, repeated states, bounded revisits, source-equals-target paths, self-loops, parallel edges, deterministic shortest-first ordering, reverse-distance pruning, resource safeguards, Declare constraint validation and monitor semantics, standard Alternate semantics, exercise enforcement for targeted and target-free searches, accepted-path explanations, persisted Declare/search configuration, transition-data predicates and correlation, optional-target constrained search, nested and multidimensional array conditions, typed condition values, side-panel state, selected-path export, semantic data, PlantUML path export, terminal-state detection, iterative SCC computation, large synthetic graph topologies, and worker-controller lifecycle behavior.
 
 ## Build targets
 
@@ -821,6 +860,8 @@ The tag triggers the offline HTML release workflow and publishes `LTSVisualizer.
 - Bounded path search is user-triggered and uses a worker, but highly connected graphs can still reach internal candidate safeguards before every requested alternative is found. Partial results are reported and additional valid paths may exist.
 - Cancelling path search terminates its worker immediately; partial paths found before cancellation are not retained.
 - Declare constraints are evaluated during bounded path search; configured visit and result limits still determine the explored search space.
+- LTSVisualizer currently implements control-flow and data-aware Declare semantics, but not MP-Declare quantitative time intervals.
+- Explanation evidence is generated for accepted paths and is intended to support inspection; some templates may receive richer family-specific evidence in future releases.
 - Multiple conditions within a predicate and multiple enabled constraints are currently combined conjunctively.
 - Transition-data fields are inferred from data present on occurrences of the selected transition. A field absent from the loaded graph cannot be selected through the graph-aware field picker.
 - The offline release depends on browser support for local `file:///` applications and file selection.
@@ -831,7 +872,9 @@ The tag triggers the offline HTML release workflow and publishes `LTSVisualizer.
 Potential future improvements include:
 
 - Additional constraint combinations and richer Boolean grouping
-- Import and export of reusable constraint configurations
+- Reusable constraint presets independent of graph JSON documents
+- Richer family-specific explanation evidence and diagnostics
+- Quantitative time conditions inspired by MP-Declare
 - Further correlation editing for captured activation data
 - Additional path-search diagnostics and progress reporting
 - Performance tuning for highly connected constrained-search spaces
