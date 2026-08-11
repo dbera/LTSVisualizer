@@ -722,8 +722,8 @@ body.resizing-side-panel canvas {
 
 .path-search-form { display: grid; gap: 8px; }
 .path-search-form > label, .path-search-number-row label { color: #475569; font-size: 12px; font-weight: 700; }
-.path-search-form input { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 7px; outline: none; }
-.path-search-form input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.13); }
+.path-search-form input, .path-search-form select { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 7px; outline: none; }
+.path-search-form input:focus, .path-search-form select:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.13); }
 .path-search-number-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
 .path-search-number-row > div { display: grid; gap: 6px; }
 .path-search-status { margin-top: 16px; color: #475569; }

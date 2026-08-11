@@ -38,7 +38,7 @@ import {
 } from "./graph/graphJson";
 import { useGraphAnalysis } from "./graph/useGraphAnalysis";
 import { usePathSearch } from "./graph/usePathSearch";
-import type { BoundedPath, ConstraintExplanationEvent } from "./graph/pathSearch";
+import type { BoundedPath, ConstraintExplanationEvent, PathSearchStrategy } from "./graph/pathSearch";
 import type { StronglyConnectedComponent } from "./graph/graphAnalysis";
 import { buildTransitionCatalogue } from "./graph/transitionCatalog";
 import { buildTransitionDataCatalogue } from "./graph/transitionDataCatalogue";
@@ -145,6 +145,7 @@ function App() {
   const [pathSearchSource, setPathSearchSource] = useState("");
   const [pathSearchTarget, setPathSearchTarget] = useState("");
   const [requestedPathCount, setRequestedPathCount] = useState(5);
+  const [pathSearchStrategy, setPathSearchStrategy] = useState<PathSearchStrategy>("shortest");
   const [maximumVisitsPerState, setMaximumVisitsPerState] = useState(1);
   const [requireConstraintExercise, setRequireConstraintExercise] = useState(true);
   const [declareConstraints, setDeclareConstraints] = useState<DeclareConstraint[]>([]);
@@ -666,10 +667,12 @@ function App() {
     const targetNodeId = pathSearchTarget.trim();
     return {
       sourceNodeId,
+      strategy: pathSearchStrategy,
       endpointMode: targetNodeId
         ? "specific-target"
         : "constraint-satisfaction",
       ...(targetNodeId ? { targetNodeId } : {}),
+      // requestedPathCount: pathSearchStrategy === "any-witness" ? 1 : requestedPathCount,
       requestedPathCount,
       maximumVisitsPerState,
       requireConstraintExercise,
@@ -992,18 +995,27 @@ function App() {
         outputs: edge.outputs,
       })),
       sourceNodeId,
+      strategy: pathSearchStrategy,
       ...(targetNodeId
         ? { targetNodeId, endpointMode: "specific-target" as const }
         : { endpointMode: "constraint-satisfaction" as const }),
+      // requestedPathCount:
+        // pathSearchStrategy === "any-witness" ? 1 : requestedPathCount,
       requestedPathCount,
       maximumVisitsPerState,
       requireConstraintExercise,
       constraints: { declare: declareConstraints },
     });
+    // const effectiveRequestedPathCount =
+    //   pathSearchStrategy === "any-witness" ? 1 : requestedPathCount;
     setStatus(
       targetNodeId
-        ? `Searching for up to ${requestedPathCount} paths from ${sourceNodeId} to ${targetNodeId}`
-        : `Searching for up to ${requestedPathCount} constraint-satisfying paths from ${sourceNodeId}`,
+        ? pathSearchStrategy === "any-witness"
+          ? `Searching for up to ${requestedPathCount} witnesses from ${sourceNodeId} to ${targetNodeId} in heuristic discovery order`
+          : `Searching for up to ${requestedPathCount} shortest paths from ${sourceNodeId} to ${targetNodeId}`
+        : pathSearchStrategy === "any-witness"
+          ? `Searching for up to ${requestedPathCount} constraint-satisfying witnesses from ${sourceNodeId} in heuristic discovery order`
+          : `Searching for up to ${requestedPathCount} shortest constraint-satisfying paths from ${sourceNodeId}`,
     );
   }
 
@@ -1155,6 +1167,7 @@ function App() {
       setPathSearchSource(importedPathSearch?.sourceNodeId ?? defaultPathState);
       setPathSearchTarget(importedPathSearch?.targetNodeId ?? "");
       setRequestedPathCount(importedPathSearch?.requestedPathCount ?? 5);
+      setPathSearchStrategy(importedPathSearch?.strategy ?? "shortest");
       setMaximumVisitsPerState(
         importedPathSearch?.maximumVisitsPerState ?? 1,
       );
@@ -2333,6 +2346,24 @@ function App() {
               ) : (
                 <>
                   <form className="path-search-form" onSubmit={runPathSearch}>
+                    <label htmlFor="path-search-strategy">Search strategy</label>
+                    <select
+                      id="path-search-strategy"
+                      value={pathSearchStrategy}
+                      onChange={(event) => {
+                        invalidatePathSearchResults();
+                        setPathSearchStrategy(event.target.value as PathSearchStrategy);
+                      }}
+                      disabled={pathSearch.status === "running"}
+                    >
+                      <option value="shortest">Shortest paths</option>
+                      <option value="any-witness">Any witness (fast)</option>
+                    </select>
+                    <p className="path-search-help">
+                      {pathSearchStrategy === "any-witness"
+                        ? "Returns up to the requested number of satisfying paths in heuristic discovery order. Results are not guaranteed to be shortest."
+                        : "Returns paths in deterministic shortest-first order."}
+                    </p>
                     <label htmlFor="path-search-source">Source state</label>
                     <input id="path-search-source" value={pathSearchSource} onChange={(event) => { invalidatePathSearchResults(); setPathSearchSource(event.target.value); }} disabled={pathSearch.status === "running"} />
                     <label htmlFor="path-search-target">Target state (optional)</label>

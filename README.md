@@ -103,12 +103,14 @@ Analysis results are held in browser memory for the currently loaded graph. They
 
 ### Bounded alternative path search
 
-- Open the **Paths** tab to compute up to a user-defined number of shortest paths between two states.
-- Set **Visits per state** to `1` for loopless paths or to a higher value to allow bounded revisits.
+- Open the **Paths** tab and choose **Shortest paths** or **Any witness (fast)**.
+- Use **Shortest paths** to compute up to a user-defined number of paths in deterministic shortest-first order.
+- Use **Any witness (fast)** to compute up to a user-defined number of satisfying paths in deterministic heuristic discovery order; these paths are not guaranteed to be shortest.
+- Any-witness priority is generic and favors candidates with more accepting constraints, more exercised constraints, and more monitors advanced from their initial state before using path length and insertion order as tie-breakers.
+- Set **Visits per state** to `1` for loopless paths or to a higher value to allow bounded revisits and self-loops.
 - Support equal source and target states. The zero-transition path is returned first, and returning cycles may follow when the visit bound permits them.
 - Treat paths as unique by ordered edge-ID sequence, so parallel transitions remain distinct even when they connect the same states.
-- Order results by increasing transition count, with deterministic ordering for equal-length alternatives.
-- Use reverse shortest-distance guidance from the target to prioritize reachable alternatives and prune states that cannot reach the target.
+- Use reverse shortest-distance guidance from a fixed target for shortest-path search and generic Declare-monitor progress for Any-witness search.
 - Run searches in an inline Web Worker with cancellation, stale-result protection, errors, reruns, and reset when another graph is loaded.
 - Stop safely at internal candidate safeguards and report partial results without claiming that no additional paths exist.
 - Select a result to reuse existing path visualization and JSON and PlantUML exports.
@@ -139,7 +141,7 @@ Path-search results are kept in browser memory for the currently loaded graph an
 - Search either toward a required target state or for a constraint-satisfying path without a fixed target.
 - Optionally require every applicable enabled constraint to be exercised, excluding paths that satisfy only vacuously.
 - Apply exercise checking consistently to target-specific and target-free searches.
-- Run constrained searches in the existing path-search worker with cancellation, stale-result protection, bounded revisits, deterministic shortest-first results, and parallel-edge identity.
+- Run constrained searches in the existing path-search worker with cancellation, stale-result protection, bounded revisits, parallel-edge identity, and a choice between deterministic shortest-first search and deterministic any-witness heuristic discovery.
 - Use the same constrained-search functionality in hosted and offline `file:///` builds.
 
 All enabled constraints must be satisfied by a returned path. Disabling a constraint excludes it from evaluation but keeps it available for later reuse. Vacuous satisfaction remains part of Declare semantics; **Require constraints to be exercised** can be used when returned paths must demonstrate participating constraint events.
@@ -204,7 +206,7 @@ Constraint monitors remain authoritative for path pruning and acceptance. Explan
 Complete-graph JSON exports preserve:
 - Configured Declare constraints and their enabled state.
 - Nested transition-data conditions, activation captures, and target correlations.
-- Source state and endpoint mode.
+- Source state, endpoint mode, and selected search strategy.
 - Optional target state.
 - Requested path count and maximum visits per state.
 - The **Require constraints to be exercised** setting.
@@ -515,31 +517,33 @@ For large graphs, worker execution prevents the analysis algorithm from blocking
 
 1. Open the **Paths** tab.
 2. Enter source and target state IDs.
-3. Choose the requested number of paths.
-4. Set **Visits per state** to `1` for loopless paths or higher for bounded revisits.
-5. Select **Find paths**. During a running search, the action changes to **Cancel**.
-6. Select a result to display it without relaying out its states.
-7. Expand **Show transition details** to compare transition names, state pairs, and edge IDs.
-8. Select a transition name or edge ID to center and select its edge, or select a state ID to center and select its state.
-9. Use **Export .puml** or **Export .json** to export the displayed computed path.
-10. Select **Return to graph view** to restore the prior graph context without clearing results.
+3. Select **Shortest paths** for deterministic shortest-first results, or **Any witness (fast)** for heuristic discovery without a shortestness guarantee.
+4. Choose the requested number of paths. Both strategies respect this value.
+5. Set **Visits per state** to `1` for loopless paths or higher for bounded revisits and self-loops.
+6. Select **Find paths**. During a running search, the action changes to **Cancel**.
+7. Select a result to display it without relaying out its states.
+8. Expand **Show transition details** to compare transition names, state pairs, and edge IDs.
+9. Select a transition name or edge ID to center and select its edge, or select a state ID to center and select its state.
+10. Use **Export .puml** or **Export .json** to export the displayed computed path.
+11. Select **Return to graph view** to restore the prior graph context without clearing results.
 
-Paths are ordered by transition count and are unique by ordered edge IDs. If source and target are equal, the zero-transition path is valid.
+Shortest-path results are ordered by transition count. Any-witness results are ordered by generic constraint-progress priority and are not guaranteed to be shortest. In both strategies, paths are unique by ordered edge IDs. If source and target are equal, the zero-transition path is valid.
 
 ### Find Declare-constrained paths
 
 1. Open the **Paths** tab.
 2. Enter the source state ID.
 3. Enter a target state ID when the path must end at a particular state, or leave the target empty to search for a constraint-satisfying path without a fixed destination.
-4. Choose the requested number of paths and set **Visits per state**.
-5. In the Declare constraints section, select **Add constraint**.
-6. Choose a Declare template and configure its required activation and, where applicable, target transition.
-7. For a transition-data predicate, select **Add condition**, choose an input or output field, configure each array-access level, select an operator, and provide a typed value when required.
-8. Configure activation captures and target correlation when events must refer to the same data item.
-9. Add further conditions or constraints as needed. Conditions within a predicate and enabled constraints in the search are combined conjunctively.
-10. Enable **Require constraints to be exercised** when vacuously satisfied paths should be excluded.
-11. Select **Find paths**. Invalid or incomplete constraints are reported before search starts.
-12. Expand **Why this path satisfies the constraints** to inspect the evidence, or select a result to visualize and export it using the normal computed-path controls.
+4. Select **Shortest paths** or **Any witness (fast)**.
+5. Choose the requested number of paths and set **Visits per state**. Any-witness mode may find an initial satisfying path much sooner, while requesting additional witnesses can require substantially more search.
+6. In the Declare constraints section, select **Add constraint**.
+8. Choose a Declare template and configure its required activation and, where applicable, target transition.
+8. For a transition-data predicate, select **Add condition**, choose an input or output field, configure each array-access level, select an operator, and provide a typed value when required.
+9. Configure activation captures and target correlation when events must refer to the same data item.
+10. Add further conditions or constraints as needed. Conditions within a predicate and enabled constraints in the search are combined conjunctively.
+11. Enable **Require constraints to be exercised** when vacuously satisfied paths should be excluded.
+12. Select **Find paths**. Invalid or incomplete constraints are reported before search starts.
+13. Expand **Why this path satisfies the constraints** to inspect the evidence, or select a result to visualize and export it using the normal computed-path controls.
 
 Use the enable control to temporarily exclude a constraint while preserving its configuration. Changing a constraint invalidates earlier search results because those results were computed under a different search specification.
 
@@ -765,7 +769,7 @@ npm run build
 npm run build:offline
 ```
 
-The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, manual and computed path selection, loops, repeated states, bounded revisits, source-equals-target paths, self-loops, parallel edges, deterministic shortest-first ordering, reverse-distance pruning, resource safeguards, Declare constraint validation and monitor semantics, standard Alternate semantics, exercise enforcement for targeted and target-free searches, accepted-path explanations, persisted Declare/search configuration, transition-data predicates and correlation, optional-target constrained search, nested and multidimensional array conditions, typed condition values, side-panel state, selected-path export, semantic data, PlantUML path export, terminal-state detection, iterative SCC computation, large synthetic graph topologies, and worker-controller lifecycle behavior.
+The current test suite covers JSON validation and round trips, graph serialization, complete-graph export, manual and computed path selection, loops, repeated states, bounded revisits, source-equals-target paths, self-loops, parallel edges, deterministic shortest-first ordering, generic any-witness ordering, multiple witnesses, requested-count handling, reverse-distance pruning, resource safeguards, Declare constraint validation and monitor semantics, standard Alternate semantics, exercise enforcement for targeted and target-free searches, accepted-path explanations, persisted Declare/search configuration, transition-data predicates and correlation, optional-target constrained search, nested and multidimensional array conditions, typed condition values, side-panel state, selected-path export, semantic data, PlantUML path export, terminal-state detection, iterative SCC computation, large synthetic graph topologies, and worker-controller lifecycle behavior.
 
 ## Build targets
 
@@ -843,8 +847,8 @@ git status
 7. Create and push an annotated version tag:
 
 ```powershell
-git tag -a v0.4.0 -m "LTSVisualizer 0.4.0"
-git push origin v0.4.0
+git tag -a v0.6.0 -m "LTSVisualizer 0.6.0"
+git push origin v0.6.0
 ```
 
 The tag triggers the offline HTML release workflow and publishes `LTSVisualizer.html` and `SHA256SUMS.txt` to the corresponding GitHub Release.
@@ -858,6 +862,7 @@ The tag triggers the offline HTML release workflow and publishes `LTSVisualizer.
 - Terminal states are reported topologically and are not classified as successful completions or definite deadlocks.
 - Graph analysis uses a worker and is user-triggered, but very large graphs still require additional browser memory for topology transfer and analysis results.
 - Bounded path search is user-triggered and uses a worker, but highly connected graphs can still reach internal candidate safeguards before every requested alternative is found. Partial results are reported and additional valid paths may exist.
+- Any-witness results are heuristic discoveries rather than shortest-path guarantees. Requesting additional witnesses can substantially increase search time and memory use.
 - Cancelling path search terminates its worker immediately; partial paths found before cancellation are not retained.
 - Declare constraints are evaluated during bounded path search; configured visit and result limits still determine the explored search space.
 - LTSVisualizer currently implements control-flow and data-aware Declare semantics, but not MP-Declare quantitative time intervals.
