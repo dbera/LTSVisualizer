@@ -4,9 +4,16 @@ All notable changes to LTSVisualizer are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/dbera/LTSVisualizer/compare/v0.5.0...HEAD)
+## [Unreleased](https://github.com/dbera/LTSVisualizer/compare/v0.6.0...HEAD)
+
+## [0.6.0](https://github.com/dbera/LTSVisualizer/compare/v0.5.0...v0.6.0) - 2026-08-10
 
 ### Added
+- Added a selectable **Any witness (fast)** strategy alongside the existing deterministic **Shortest paths** strategy.
+- Added generic Any-witness candidate prioritization based on accepting constraints, exercised constraints, monitors advanced from their initial state, path depth, and deterministic insertion order.
+- Added support for returning up to the user-requested number of Any-witness paths in heuristic discovery order.
+- Added persistence and restoration of the selected path-search strategy in complete-graph JSON exports.
+- Added focused tests for requested witness counts, bounded-search exhaustion, deterministic results, parallel-edge identity, bounded revisits, loop-dependent witnesses, self-loops, and shortest-strategy regression behavior.
 - Added structured explanations for accepted Declare-constrained paths, including constraint ID, template, satisfaction summary, exercised or vacuous status, one-based path steps, transition names, and exact edge IDs.
 - Added expandable **Why this path satisfies the constraints** sections below computed paths.
 - Added clickable explanation evidence that focuses the corresponding transition and displays its inputs and outputs in the Inspector.
@@ -17,6 +24,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Added regression tests for explanation payloads, persisted constraints and search settings, standard Alternate semantics, and exercise enforcement in target-specific searches.
 
 ### Changed
+- Allowed **Number of paths** to remain user-configurable in Any-witness mode instead of forcing a single result.
+- Updated constrained path-search help and status text to distinguish shortest-first results from heuristic witness discovery.
+- Kept both strategies on the same expanded- and queued-candidate resource safeguards so their search budgets remain directly comparable.
 - Updated the positive Alternate family to standard two-operand Declare/MP-Declare semantics.
 - Changed **Alternate response** so unrelated events are allowed between a qualifying activation and correlated target, while another qualifying activation before fulfillment violates the constraint.
 - Changed **Alternate precedence** so each qualifying target requires a correlated activation since the previous qualifying target.
@@ -31,6 +41,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Removed **Not alternate response**, **Not alternate precedence**, and **Not alternate succession** because their former specialized interval semantics were not standard Declare/MP-Declare templates.
 
 ### Fixed
+- Fixed the selected Any-witness strategy not being passed from the Paths UI into the worker search input, which previously caused the search to fall back to shortest-first behavior.
+- Fixed Any-witness graph exports forcing the persisted requested path count back to one.
 - Fixed target-specific searches ignoring the checked **Require constraints to be exercised** option.
 - Fixed positive Alternate templates rejecting arbitrary configured `between` events instead of only enforcing standard alternation between qualifying activation and target events.
 - Fixed documentation that described the removed negative Alternate templates and obsolete third Alternate operand.
