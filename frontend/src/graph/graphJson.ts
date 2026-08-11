@@ -1,5 +1,5 @@
 import type { DeclareConstraint } from "./declareConstraints";
-import type { PathSearchEndpointMode } from "./pathSearch";
+import type { PathSearchEndpointMode, PathSearchStrategy } from "./pathSearch";
 import { parseDeclareConstraintsJson } from "./declareConstraintJson";
 import {
   resolvePath,
@@ -36,6 +36,7 @@ export interface GraphJsonMetadata {
 export interface PersistedPathSearchConfiguration {
   sourceNodeId: string;
   endpointMode: PathSearchEndpointMode;
+  strategy?: PathSearchStrategy;
   targetNodeId?: string;
   requestedPathCount: number;
   maximumVisitsPerState: number;
@@ -273,6 +274,17 @@ function parsePathSearchConfiguration(
       'pathSearch.endpointMode must be either "specific-target" or "constraint-satisfaction".',
     );
   }
+  const strategyValue = configuration.strategy;
+  if (
+    strategyValue !== undefined &&
+    strategyValue !== "shortest" &&
+    strategyValue !== "any-witness"
+  ) {
+    throw new GraphJsonError(
+      'pathSearch.strategy must be either "shortest" or "any-witness".',
+    );
+  }
+  const strategy = strategyValue as PathSearchStrategy | undefined;
   const nodeIds = new Set(graph.nodes.map((node) => node.id));
   if (!nodeIds.has(sourceNodeId)) {
     throw new GraphJsonError(
@@ -298,6 +310,7 @@ function parsePathSearchConfiguration(
   return {
     sourceNodeId,
     endpointMode,
+    ...(strategy ? { strategy } : {}),
     ...(targetNodeId ? { targetNodeId } : {}),
     requestedPathCount: requirePositiveInteger(
       configuration.requestedPathCount,

@@ -25,6 +25,8 @@ export type PathConstraints = {
   declare?: DeclareConstraint[];
 };
 
+export type PathSearchStrategy = "shortest" | "any-witness";
+
 export type PathSearchEndpointMode =
   | "specific-target"
   | "constraint-satisfaction";
@@ -35,6 +37,7 @@ export type PathSearchInput = {
   sourceNodeId: string;
   targetNodeId?: string;
   endpointMode?: PathSearchEndpointMode;
+  strategy?: PathSearchStrategy;
   requireConstraintExercise?: boolean;
   requestedPathCount: number;
   maximumVisitsPerState: number;
@@ -108,6 +111,9 @@ type SearchCandidate = {
   monitorEntries: MonitorSetEntry[];
   exercisedConstraintIds: ReadonlySet<string>;
   insertionSequence: number;
+  acceptingConstraintCount?: number;
+  exercisedConstraintCount?: number;
+  advancedMonitorCount?: number;
 };
 
 const DEFAULT_MAXIMUM_EXPANDED_CANDIDATES = 1_000_000;
@@ -115,6 +121,14 @@ const DEFAULT_MAXIMUM_QUEUED_CANDIDATES = 100_000;
 
 class CandidateMinHeap {
   private readonly items: SearchCandidate[] = [];
+
+  private readonly higherPriority: (left: SearchCandidate, right: SearchCandidate) => boolean;
+
+  public constructor(
+    higherPriority: (left: SearchCandidate, right: SearchCandidate) => boolean,
+  ) {
+    this.higherPriority = higherPriority;
+  }
 
   public get size(): number {
     return this.items.length;
@@ -147,7 +161,7 @@ class CandidateMinHeap {
     while (index > 0) {
       const parentIndex = Math.floor((index - 1) / 2);
 
-      if (!hasHigherPriority(this.items[index], this.items[parentIndex])) {
+      if (!this.higherPriority(this.items[index], this.items[parentIndex])) {
         return;
       }
 
@@ -167,14 +181,14 @@ class CandidateMinHeap {
 
       if (
         leftIndex < this.items.length &&
-        hasHigherPriority(this.items[leftIndex], this.items[bestIndex])
+        this.higherPriority(this.items[leftIndex], this.items[bestIndex])
       ) {
         bestIndex = leftIndex;
       }
 
       if (
         rightIndex < this.items.length &&
-        hasHigherPriority(this.items[rightIndex], this.items[bestIndex])
+        this.higherPriority(this.items[rightIndex], this.items[bestIndex])
       ) {
         bestIndex = rightIndex;
       }
@@ -190,7 +204,7 @@ class CandidateMinHeap {
   }
 }
 
-function hasHigherPriority(
+function hasShortestPriority(
   left: SearchCandidate,
   right: SearchCandidate,
 ): boolean {
@@ -203,6 +217,48 @@ function hasHigherPriority(
   }
 
   return left.insertionSequence < right.insertionSequence;
+}
+
+function hasAnyWitnessPriority(
+  left: SearchCandidate,
+  right: SearchCandidate,
+): boolean {
+  const progressKeys: (keyof SearchCandidate)[] = [
+    "acceptingConstraintCount",
+    "exercisedConstraintCount",
+    "advancedMonitorCount",
+  ];
+
+  for (const key of progressKeys) {
+    const leftValue = (left[key] as number | undefined) ?? 0;
+    const rightValue = (right[key] as number | undefined) ?? 0;
+    if (leftValue !== rightValue) return leftValue > rightValue;
+  }
+
+  if (left.depth !== right.depth) return left.depth < right.depth;
+  return left.insertionSequence < right.insertionSequence;
+}
+
+function getAnyWitnessProgress(
+  entries: readonly MonitorSetEntry[],
+  initialStateKeys: readonly string[],
+  exercisedConstraintIds: ReadonlySet<string>,
+) {
+  let acceptingConstraintCount = 0;
+  let advancedMonitorCount = 0;
+
+  entries.forEach((entry, index) => {
+    if (entry.monitor.status(entry.state).accepting) acceptingConstraintCount += 1;
+    if (entry.monitor.stateKey(entry.state) !== initialStateKeys[index]) {
+      advancedMonitorCount += 1;
+    }
+  });
+
+  return {
+    acceptingConstraintCount,
+    exercisedConstraintCount: exercisedConstraintIds.size,
+    advancedMonitorCount,
+  };
 }
 
 function buildTopology(input: PathSearchInput): NormalizedTopology {
@@ -632,6 +688,11 @@ export function findKShortestBoundedPaths(
   const edgesById = new Map(input.edges.map((edge) => [edge.id, edge]));
   const initialMonitorEntries = createMonitorSet(compiledConstraints);
   const requireConstraintExercise = input.requireConstraintExercise ?? true;
+  const strategy = input.strategy ?? "shortest";
+  const effectiveRequestedPathCount = strategy === "any-witness" ? 1 : input.requestedPathCount;
+  const initialMonitorStateKeys = initialMonitorEntries.map((entry) =>
+    entry.monitor.stateKey(entry.state),
+  );
 
   if (
     endpointMode === "constraint-satisfaction" &&
@@ -642,7 +703,9 @@ export function findKShortestBoundedPaths(
     );
   }
 
-  const queue = new CandidateMinHeap();
+  const queue = new CandidateMinHeap(
+    strategy === "any-witness" ? hasAnyWitnessPriority : hasShortestPriority,
+  );
   let nextInsertionSequence = 1;
   let expandedCandidateCount = 0;
   let peakQueuedCandidateCount = 1;
@@ -661,6 +724,9 @@ export function findKShortestBoundedPaths(
     monitorEntries: initialMonitorEntries,
     exercisedConstraintIds: new Set<string>(),
     insertionSequence: 0,
+    ...(strategy === "any-witness"
+      ? getAnyWitnessProgress(initialMonitorEntries, initialMonitorStateKeys, new Set<string>())
+      : {}),
   });
 
   const paths: BoundedPath[] = [];
@@ -791,6 +857,13 @@ export function findKShortestBoundedPaths(
         monitorEntries: nextMonitorEntries,
         exercisedConstraintIds: nextExercisedConstraintIds,
         insertionSequence: nextInsertionSequence,
+        ...(strategy === "any-witness"
+          ? getAnyWitnessProgress(
+              nextMonitorEntries,
+              initialMonitorStateKeys,
+              nextExercisedConstraintIds,
+            )
+          : {}),
       });
       nextInsertionSequence += 1;
       peakQueuedCandidateCount = Math.max(
@@ -804,7 +877,7 @@ export function findKShortestBoundedPaths(
     }
   }
 
-  const requestedCountReached = paths.length >= input.requestedPathCount;
+  const requestedCountReached = paths.length >= effectiveRequestedPathCount;
   const exhausted =
     !requestedCountReached &&
     !resourceLimitReached &&
