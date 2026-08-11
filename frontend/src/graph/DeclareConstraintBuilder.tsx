@@ -87,9 +87,6 @@ export default function DeclareConstraintBuilder({
         target: definition.requiredRoles.includes("target")
           ? constraint.target ?? group()
           : undefined,
-        between: definition.requiredRoles.includes("between")
-          ? constraint.between ?? group()
-          : undefined,
         count: definition.supportsCount ? constraint.count ?? 1 : undefined,
       };
     });
@@ -259,28 +256,6 @@ export default function DeclareConstraintBuilder({
                   disabled={disabled}
                   onChange={(condition) =>
                     changeCondition(constraint.id, "target", condition)
-                  }
-                />
-                  </>
-                )}
-                {definition.requiredRoles.includes("between") && (
-                  <>
-                    <TransitionPicker
-                      label="Between transition"
-                      value={transitionValue(constraint, "between")}
-                      options={transitionOptions}
-                      disabled={disabled}
-                      onChange={(value) =>
-                        changeTransition(constraint.id, "between", value)
-                      }
-                    />
-                    <TransitionConditionEditor
-                  catalogue={transitionDataCatalogue}
-                  transitionName={transitionValue(constraint, "between")}
-                  condition={transitionCondition(constraint, "between")}
-                  disabled={disabled}
-                  onChange={(condition) =>
-                    changeCondition(constraint.id, "between", condition)
                   }
                 />
                   </>

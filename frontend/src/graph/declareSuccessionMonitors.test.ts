@@ -6,7 +6,6 @@ import type { DeclareTransition } from "./declarePredicates";
 import {
   createAlternateSuccessionMonitor,
   createChainSuccessionMonitor,
-  createNotAlternateSuccessionMonitor,
   createNotChainSuccessionMonitor,
   createNotSuccessionMonitor,
   createSuccessionMonitor,
@@ -68,7 +67,6 @@ const B = (id: number): DeclareTransition => ({
   outputs: { id },
 });
 const X: DeclareTransition = { transition: "X" };
-const C: DeclareTransition = { transition: "C" };
 
 describe("Succession", () => {
   it("combines response and precedence semantics", () => {
@@ -143,17 +141,13 @@ describe("Chain succession", () => {
 });
 
 describe("Alternate succession", () => {
-  it("combines alternate response and alternate precedence", () => {
-    const monitor = createAlternateSuccessionMonitor(
-      group("A"),
-      group("B"),
-      group("C"),
-    );
+  it("combines standard alternate response and alternate precedence", () => {
+    const monitor = createAlternateSuccessionMonitor(group("A"), group("B"));
     expect(status(monitor, [{ transition: "A" }, X, { transition: "B" }])).toEqual({
       viable: true,
       accepting: true,
     });
-    expect(status(monitor, [{ transition: "A" }, { transition: "A" }])).toEqual({
+    expect(status(monitor, [{ transition: "A" }, { transition: "A" }, { transition: "B" }])).toEqual({
       viable: false,
       accepting: false,
     });
@@ -161,30 +155,13 @@ describe("Alternate succession", () => {
       viable: false,
       accepting: false,
     });
-    expect(status(monitor, [{ transition: "A" }, C, { transition: "B" }])).toEqual({
-      viable: false,
-      accepting: false,
-    });
+    expect(status(monitor, [{ transition: "A" }, { transition: "B" }, { transition: "A" }, { transition: "B" }]).accepting).toBe(true);
   });
 
-  it("implements specialized negative alternate succession", () => {
-    const monitor = createNotAlternateSuccessionMonitor(
-      group("A"),
-      group("B"),
-      group("C"),
-    );
-    expect(status(monitor, [{ transition: "A" }, C, { transition: "B" }])).toEqual({
-      viable: false,
-      accepting: false,
-    });
-    expect(status(monitor, [{ transition: "A" }, X, { transition: "B" }]).accepting).toBe(true);
-  });
-
-  it("preserves correlation in the composed alternate monitors", () => {
+  it("preserves correlation in both composed directions", () => {
     const monitor = createAlternateSuccessionMonitor(
       correlatedActivation,
       group("B"),
-      group("C"),
       correlation,
     );
     expect(status(monitor, [A(10), B(10)]).accepting).toBe(true);

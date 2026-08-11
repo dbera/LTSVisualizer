@@ -1223,3 +1223,18 @@ body.resizing-side-panel canvas {
   line-height: 1.35;
 }
 
+
+.computed-path-explanations { border-top: 1px solid #e2e8f0; }
+.computed-path-explanations > summary { padding: 8px 10px; color: #1d4ed8; font-size: 11px; font-weight: 750; cursor: pointer; }
+.constraint-explanation-list { display: grid; gap: 8px; padding: 8px 10px 10px; background: #f8fafc; }
+.constraint-explanation { padding: 9px; border: 1px solid #bbf7d0; border-radius: 7px; background: #f0fdf4; }
+.constraint-explanation-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.constraint-explanation-heading strong { color: #14532d; font-size: 11px; overflow-wrap: anywhere; }
+.constraint-explanation-heading span { padding: 2px 6px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: 9px; font-weight: 800; }
+.constraint-explanation > small { display: block; margin-top: 2px; color: #64748b; font-size: 9px; }
+.constraint-explanation > p { margin: 6px 0 0; color: #334155; font-size: 10px; line-height: 1.4; }
+.constraint-explanation .constraint-exercise-status { color: #64748b; }
+.constraint-explanation ol { display: grid; gap: 4px; margin: 7px 0 0; padding-left: 20px; }
+.constraint-explanation li { color: #475569; font-size: 10px; }
+.constraint-explanation li button { padding: 0; border: 0; background: transparent; color: #2563eb; font-size: 10px; text-align: left; overflow-wrap: anywhere; }
+.constraint-explanation li button:hover { color: #1d4ed8; text-decoration: underline; }

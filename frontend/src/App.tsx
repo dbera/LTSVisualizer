@@ -34,10 +34,11 @@ import {
   createSelectedPathJsonDocument,
   parseGraphJsonText,
   serializeGraphJson,
+  type PersistedPathSearchConfiguration,
 } from "./graph/graphJson";
 import { useGraphAnalysis } from "./graph/useGraphAnalysis";
 import { usePathSearch } from "./graph/usePathSearch";
-import type { BoundedPath } from "./graph/pathSearch";
+import type { BoundedPath, ConstraintExplanationEvent } from "./graph/pathSearch";
 import type { StronglyConnectedComponent } from "./graph/graphAnalysis";
 import { buildTransitionCatalogue } from "./graph/transitionCatalog";
 import { buildTransitionDataCatalogue } from "./graph/transitionDataCatalogue";
@@ -660,6 +661,20 @@ function App() {
     URL.revokeObjectURL(url);
   }
 
+  function getPersistedPathSearchConfiguration(): PersistedPathSearchConfiguration {
+    const sourceNodeId = pathSearchSource.trim();
+    const targetNodeId = pathSearchTarget.trim();
+    return {
+      sourceNodeId,
+      endpointMode: targetNodeId
+        ? "specific-target"
+        : "constraint-satisfaction",
+      ...(targetNodeId ? { targetNodeId } : {}),
+      requestedPathCount,
+      maximumVisitsPerState,
+      requireConstraintExercise,
+    };
+  }
   function exportFullGraphJson() {
     const graph = graphRef.current;
     if (!graph) {
@@ -672,9 +687,12 @@ function App() {
       const safeName = sourceName
         .replace(/[^a-zA-Z0-9._-]+/g, "-")
         .replace(/^-+|-+$/g, "") || "graph";
-      const document = createGraphJsonDocument(graph, {
-        title: sourceName,
-      });
+      const document = createGraphJsonDocument(
+        graph,
+        { title: sourceName },
+        declareConstraints,
+        getPersistedPathSearchConfiguration(),
+      );
       const exportFileName = `${safeName}.json`;
 
       downloadTextFile(
@@ -722,9 +740,14 @@ function App() {
 
     try {
       const resolved = resolvePath(graph, path);
-      const document = createSelectedPathJsonDocument(graph, path, {
-        title: `Selected path ${resolved.startNodeId} to ${resolved.endNodeId}`,
-      });
+      const document = createSelectedPathJsonDocument(
+        graph,
+        path,
+        {
+          title: `Selected path ${resolved.startNodeId} to ${resolved.endNodeId}`,
+        },
+        declareConstraints,
+      );
       const fileName = `LTSVisualizer-path-${resolved.startNodeId}-to-${resolved.endNodeId}.json`;
       downloadTextFile(
         serializeGraphJson(document),
@@ -1113,6 +1136,7 @@ function App() {
       const parsed = parseGraphJsonText(await file.text());
       const graph: GraphData = parsed.graph;
       const importedPath = parsed.selectedPath;
+      setDeclareConstraints(parsed.declareConstraints);
 
       graphRef.current = graph;
       setGraphLoaded(true);
@@ -1127,9 +1151,16 @@ function App() {
       const defaultPathState = graph.nodes.some((node) => node.id === "0")
         ? "0"
         : graph.nodes[0].id;
-      setPathSearchSource(defaultPathState);
-      setPathSearchTarget("");
-      setRequireConstraintExercise(true);
+      const importedPathSearch = parsed.pathSearch;
+      setPathSearchSource(importedPathSearch?.sourceNodeId ?? defaultPathState);
+      setPathSearchTarget(importedPathSearch?.targetNodeId ?? "");
+      setRequestedPathCount(importedPathSearch?.requestedPathCount ?? 5);
+      setMaximumVisitsPerState(
+        importedPathSearch?.maximumVisitsPerState ?? 1,
+      );
+      setRequireConstraintExercise(
+        importedPathSearch?.requireConstraintExercise ?? true,
+      );
 
       if (importedPath) {
         const resolved = resolvePath(graph, importedPath);
@@ -1685,6 +1716,15 @@ function App() {
     setStatus(`Focused state ${nodeId}`);
   }
 
+  function focusExplanationEvent(
+    explanationEvent: ConstraintExplanationEvent,
+    pathIndex: number,
+  ) {
+    focusComputedPathEdge(
+      explanationEvent.edgeId,
+      `explanation-${pathIndex}-${explanationEvent.stepNumber}-${explanationEvent.edgeId}`,
+    );
+  }
   function getComputedPathSteps(path: BoundedPath) {
     const graph = graphRef.current;
     if (!graph) return [];
@@ -2171,7 +2211,7 @@ function App() {
                               >
                                 <span>Cyclic component {getCyclicComponentNumber(component.id)}</span>
                                 <small>
-                                  {component.nodeIds.length} states Â·{" "}
+                                  {component.nodeIds.length} states{" \u00b7 "}
                                   {component.internalEdgeIds.length} transitions
                                 </small>
                               </button>
@@ -2325,8 +2365,9 @@ function App() {
                     </label>
                     <p className="path-search-help">
                       Without a target, paths may end at any state after all enabled
-                      constraints are satisfied. Exercise checking prevents vacuous
-                      matches where a constraint never participates.
+                      constraints are satisfied. When exercise checking is enabled,
+                      returned paths must exercise every enabled constraint that
+                      requires exercise.
                     </p>
                     <div className="path-search-number-row">
                       <div>
@@ -2386,13 +2427,53 @@ function App() {
                                   <small>
                                     {path.edgeIds.length} transition
                                     {path.edgeIds.length === 1 ? "" : "s"}
-                                    {` Â· Ends at state ${
+                                    {` \u00b7 Ends at state ${
                                       path.endNodeId ??
                                       steps.at(-1)?.target ??
                                       path.startNodeId
                                     }`}
                                   </small>
                                 </button>
+                                {(path.explanations?.length ?? 0) > 0 && (
+                                  <details className="computed-path-explanations">
+                                    <summary>Why this path satisfies the constraints</summary>
+                                    <div className="constraint-explanation-list">
+                                      {path.explanations?.map((explanation) => (
+                                        <section
+                                          key={explanation.constraintId}
+                                          className="constraint-explanation"
+                                        >
+                                          <div className="constraint-explanation-heading">
+                                            <strong>{explanation.constraintId}</strong>
+                                            <span>Satisfied</span>
+                                          </div>
+                                          <small>{explanation.template}</small>
+                                          <p>{explanation.summary}</p>
+                                          <p className="constraint-exercise-status">
+                                            {explanation.exercised
+                                              ? "Constraint was exercised by this path."
+                                              : "Constraint was satisfied without an exercise event."}
+                                          </p>
+                                          {explanation.events.length > 0 && (
+                                            <ol>
+                                              {explanation.events.map((explanationEvent, eventIndex) => (
+                                                <li key={`${explanationEvent.role}-${explanationEvent.stepNumber}-${explanationEvent.edgeId}-${eventIndex}`}>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => focusExplanationEvent(explanationEvent, index)}
+                                                  >
+                                                    {explanationEvent.role}: step {explanationEvent.stepNumber}{" "}
+                                                    {explanationEvent.transition} ({explanationEvent.edgeId})
+                                                  </button>
+                                                </li>
+                                              ))}
+                                            </ol>
+                                          )}
+                                        </section>
+                                      ))}
+                                    </div>
+                                  </details>
+                                )}
                                 <details className="computed-path-details">
                                   <summary>Show transition details</summary>
                                   {steps.length === 0 ? (
@@ -2432,7 +2513,7 @@ function App() {
                                             >
                                               {step.source}
                                             </button>
-                                            <span aria-hidden="true">â†’</span>
+                                            <span aria-hidden="true">{"\u2192"}</span>
                                             <button
                                               type="button"
                                               onClick={() =>

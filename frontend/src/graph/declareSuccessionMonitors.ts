@@ -7,7 +7,6 @@ import type { DeclareTransition } from "./declarePredicates";
 import {
   createAlternatePrecedenceMonitor,
   createChainPrecedenceMonitor,
-  createNotAlternatePrecedenceMonitor,
   createNotChainPrecedenceMonitor,
   createNotPrecedenceMonitor,
   createPrecedenceMonitor,
@@ -15,7 +14,6 @@ import {
 import {
   createAlternateResponseMonitor,
   createChainResponseMonitor,
-  createNotAlternateResponseMonitor,
   createNotChainResponseMonitor,
   createNotResponseMonitor,
   createResponseMonitor,
@@ -99,43 +97,10 @@ export function createNotChainSuccessionMonitor(
 export function createAlternateSuccessionMonitor(
   activation: DeclarePredicateGroup,
   target: DeclarePredicateGroup,
-  between: DeclarePredicateGroup,
   correlation?: CorrelationCondition,
 ): DeclareMonitor<CompositeMonitorState> {
   return composeMonitors(
-    createAlternateResponseMonitor(
-      activation,
-      target,
-      between,
-      correlation,
-    ),
-    createAlternatePrecedenceMonitor(
-      activation,
-      target,
-      between,
-      correlation,
-    ),
-  );
-}
-
-export function createNotAlternateSuccessionMonitor(
-  activation: DeclarePredicateGroup,
-  target: DeclarePredicateGroup,
-  allowedBetween: DeclarePredicateGroup,
-  correlation?: CorrelationCondition,
-): DeclareMonitor<CompositeMonitorState> {
-  return composeMonitors(
-    createNotAlternateResponseMonitor(
-      activation,
-      target,
-      allowedBetween,
-      correlation,
-    ),
-    createNotAlternatePrecedenceMonitor(
-      activation,
-      target,
-      allowedBetween,
-      correlation,
-    ),
+    createAlternateResponseMonitor(activation, target, correlation),
+    createAlternatePrecedenceMonitor(activation, target, correlation),
   );
 }

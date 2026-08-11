@@ -23,6 +23,13 @@ function searchInput(
   };
 }
 
+function groupForTest(name: string) {
+  return {
+    relation: "or" as const,
+    predicates: [{ transition: { operator: "equals" as const, value: name } }],
+  };
+}
+
 describe("findKShortestBoundedPaths", () => {
   it("finds a direct path", () => {
     const result = findKShortestBoundedPaths(
@@ -592,13 +599,52 @@ describe("findKShortestBoundedPaths", () => {
         constraints: { declare: [responseConstraint] },
       });
 
-      expect(result.paths).toEqual([
-        {
-          startNodeId: "source",
-          endNodeId: "satisfied",
-          edgeIds: ["a", "b"],
-        },
-      ]);
+      expect(result.paths).toHaveLength(1);
+      expect(result.paths[0]).toMatchObject({
+        startNodeId: "source",
+        endNodeId: "satisfied",
+        edgeIds: ["a", "b"],
+      });
+    });
+
+    it("rejects vacuous target-specific paths when exercise is required", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "target"],
+        edges: [
+          { id: "x", source: "source", target: "target", transition: "X" },
+        ],
+        sourceNodeId: "source",
+        targetNodeId: "target",
+        endpointMode: "specific-target",
+        requireConstraintExercise: true,
+        requestedPathCount: 1,
+        maximumVisitsPerState: 1,
+        constraints: { declare: [responseConstraint] },
+      });
+
+      expect(result.paths).toEqual([]);
+    });
+
+    it("allows vacuous target-specific paths when exercise is disabled", () => {
+      const result = findKShortestBoundedPaths({
+        nodeIds: ["source", "target"],
+        edges: [
+          { id: "x", source: "source", target: "target", transition: "X" },
+        ],
+        sourceNodeId: "source",
+        targetNodeId: "target",
+        endpointMode: "specific-target",
+        requireConstraintExercise: false,
+        requestedPathCount: 1,
+        maximumVisitsPerState: 1,
+        constraints: { declare: [responseConstraint] },
+      });
+
+      expect(result.paths).toHaveLength(1);
+      expect(result.paths[0]).toMatchObject({
+        startNodeId: "source",
+        edgeIds: ["x"],
+      });
     });
 
     it("rejects vacuous Response satisfaction when exercise is required", () => {
@@ -632,9 +678,12 @@ describe("findKShortestBoundedPaths", () => {
         constraints: { declare: [responseConstraint] },
       });
 
-      expect(result.paths).toEqual([
-        { startNodeId: "source", endNodeId: "source", edgeIds: [] },
-      ]);
+      expect(result.paths).toHaveLength(1);
+      expect(result.paths[0]).toMatchObject({
+        startNodeId: "source",
+        endNodeId: "source",
+        edgeIds: [],
+      });
     });
 
     it("does not treat only a Precedence activation as exercise", () => {
@@ -678,9 +727,12 @@ describe("findKShortestBoundedPaths", () => {
         },
       });
 
-      expect(result.paths).toEqual([
-        { startNodeId: "source", endNodeId: "source", edgeIds: [] },
-      ]);
+      expect(result.paths).toHaveLength(1);
+      expect(result.paths[0]).toMatchObject({
+        startNodeId: "source",
+        endNodeId: "source",
+        edgeIds: [],
+      });
     });
 
     it("requires at least one enabled constraint without a target", () => {
@@ -713,6 +765,196 @@ describe("findKShortestBoundedPaths", () => {
         { startNodeId: "source", edgeIds: ["edge"] },
       ]);
     });
+  });
+
+  it("explains data-aware Response and cardinality satisfaction", () => {
+    const result = findKShortestBoundedPaths({
+      nodeIds: ["0", "1", "2", "3"],
+      edges: [
+        { id: "audit", source: "0", target: "1", transition: "Audit", inputs: { events: [[{ type: "login" }]] } },
+        { id: "login", source: "1", target: "2", transition: "Login", inputs: { credentials: [{ userName: "xyz" }] } },
+        { id: "complete", source: "2", target: "3", transition: "Complete" },
+      ],
+      sourceNodeId: "0",
+      targetNodeId: "3",
+      requestedPathCount: 1,
+      maximumVisitsPerState: 1,
+      constraints: { declare: [
+        {
+          id: "login-response",
+          template: "response",
+          enabled: true,
+          activation: { relation: "or", predicates: [{ transition: { operator: "equals", value: "Login" }, condition: { type: "source", source: "inputs", condition: { type: "contains-item", path: ["credentials"], condition: { type: "comparison", path: ["userName"], operator: "=", value: "xyz" } } } }] },
+          target: { relation: "or", predicates: [{ transition: { operator: "equals", value: "Complete" } }] },
+        },
+        {
+          id: "audit-count",
+          template: "at-least",
+          enabled: true,
+          count: 1,
+          activation: { relation: "or", predicates: [{ transition: { operator: "equals", value: "Audit" }, condition: { type: "source", source: "inputs", condition: { type: "contains-item", path: ["events"], condition: { type: "comparison", path: [0, "type"], operator: "=", value: "login" } } } }] },
+        },
+      ] },
+    });
+    expect(result.paths[0].explanations).toEqual([
+      {
+        constraintId: "login-response", template: "response", status: "satisfied", exercised: true,
+        summary: "1 activation fulfilled.",
+        events: [
+          { role: "activation", stepNumber: 2, edgeId: "login", transition: "Login" },
+          { role: "fulfillment", stepNumber: 3, edgeId: "complete", transition: "Complete" },
+        ],
+      },
+      {
+        constraintId: "audit-count", template: "at-least", status: "satisfied", exercised: true,
+        summary: "Matched 1 time; required count 1.",
+        events: [{ role: "match", stepNumber: 1, edgeId: "audit", transition: "Audit" }],
+      },
+    ]);
+  });
+
+
+  it("explains position, choice, and precedence template families", () => {
+    const result = findKShortestBoundedPaths({
+      nodeIds: ["0", "1", "2", "3"],
+      edges: [
+        { id: "a", source: "0", target: "1", transition: "A" },
+        { id: "x", source: "1", target: "2", transition: "X" },
+        { id: "b", source: "2", target: "3", transition: "B" },
+      ],
+      sourceNodeId: "0",
+      targetNodeId: "3",
+      requestedPathCount: 1,
+      maximumVisitsPerState: 1,
+      constraints: { declare: [
+        { id: "init-a", template: "init", enabled: true, activation: { relation: "or", predicates: [{ transition: { operator: "equals", value: "A" } }] } },
+        { id: "choice-a-c", template: "choice", enabled: true, activation: { relation: "or", predicates: [{ transition: { operator: "equals", value: "A" } }] }, target: { relation: "or", predicates: [{ transition: { operator: "equals", value: "C" } }] } },
+        { id: "a-before-b", template: "precedence", enabled: true, activation: { relation: "or", predicates: [{ transition: { operator: "equals", value: "A" } }] }, target: { relation: "or", predicates: [{ transition: { operator: "equals", value: "B" } }] } },
+      ] },
+    });
+    expect(result.paths[0].explanations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        constraintId: "init-a",
+        summary: "The first transition matches the Init activation.",
+        events: [expect.objectContaining({ role: "position-match", edgeId: "a", stepNumber: 1 })],
+      }),
+      expect.objectContaining({
+        constraintId: "choice-a-c",
+        summary: "Activation side occurred, satisfying Choice.",
+        events: [expect.objectContaining({ role: "choice-match", edgeId: "a" })],
+      }),
+      expect.objectContaining({
+        constraintId: "a-before-b",
+        summary: "Every target had a qualifying preceding activation.",
+        events: [
+          expect.objectContaining({ role: "preceding-support", edgeId: "a" }),
+          expect.objectContaining({ role: "target", edgeId: "b" }),
+        ],
+      }),
+    ]));
+  });
+
+  it("explains negative templates as avoided forbidden relationships", () => {
+    const result = findKShortestBoundedPaths({
+      nodeIds: ["0", "1", "2", "3"],
+      edges: [
+        { id: "a", source: "0", target: "1", transition: "A", inputs: { id: 10 } },
+        { id: "b-wrong", source: "1", target: "2", transition: "B", outputs: { id: 20 } },
+        { id: "x", source: "2", target: "3", transition: "X" },
+      ],
+      sourceNodeId: "0",
+      targetNodeId: "3",
+      requestedPathCount: 1,
+      maximumVisitsPerState: 1,
+      constraints: { declare: [{
+        id: "not-correlated-response",
+        template: "not-response",
+        enabled: true,
+        activation: { relation: "or", predicates: [{ transition: { operator: "equals", value: "A" }, captures: [{ alias: "id", source: "inputs", path: ["id"] }] }] },
+        target: { relation: "or", predicates: [{ transition: { operator: "equals", value: "B" } }] },
+        correlation: { type: "comparison", left: { kind: "target", source: "outputs", path: ["id"] }, operator: "=", right: { kind: "activation", alias: "id" } },
+      }] },
+    });
+    expect(result.paths[0].explanations?.[0]).toMatchObject({
+      constraintId: "not-correlated-response",
+      status: "satisfied",
+      exercised: true,
+      summary: "No forbidden correlated activation-target relationship occurred.",
+    });
+  });
+
+  it("uses standard Alternate Response semantics during path search", () => {
+    const result = findKShortestBoundedPaths(searchInput(
+      ["0", "1", "2", "3", "4"],
+      [
+        { id: "a", source: "0", target: "1", transition: "A" },
+        { id: "x", source: "1", target: "2", transition: "X" },
+        { id: "b", source: "2", target: "4", transition: "B" },
+        { id: "a-again", source: "1", target: "3", transition: "A" },
+        { id: "b-late", source: "3", target: "4", transition: "B" },
+      ],
+      {
+        requestedPathCount: 5,
+        constraints: { declare: [{
+          id: "alternate-response",
+          template: "alternate-response",
+          enabled: true,
+          activation: groupForTest("A"),
+          target: groupForTest("B"),
+        }] },
+      },
+    ));
+    expect(result.paths.map((path) => path.edgeIds)).toEqual([["a", "x", "b"]]);
+  });
+
+  it("uses standard Alternate Precedence semantics during path search", () => {
+    const result = findKShortestBoundedPaths(searchInput(
+      ["0", "1", "2", "3", "4", "5"],
+      [
+        { id: "a", source: "0", target: "1", transition: "A" },
+        { id: "x", source: "1", target: "2", transition: "X" },
+        { id: "b", source: "2", target: "5", transition: "B" },
+        { id: "b-first", source: "1", target: "3", transition: "B" },
+        { id: "x2", source: "3", target: "4", transition: "X" },
+        { id: "b-second", source: "4", target: "5", transition: "B" },
+      ],
+      {
+        requestedPathCount: 5,
+        constraints: { declare: [{
+          id: "alternate-precedence",
+          template: "alternate-precedence",
+          enabled: true,
+          activation: groupForTest("A"),
+          target: groupForTest("B"),
+        }] },
+      },
+    ));
+    expect(result.paths.map((path) => path.edgeIds)).toEqual([["a", "x", "b"]]);
+  });
+
+  it("uses both standard Alternate Succession directions during path search", () => {
+    const result = findKShortestBoundedPaths(searchInput(
+      ["0", "1", "2", "3", "4", "5"],
+      [
+        { id: "a", source: "0", target: "1", transition: "A" },
+        { id: "x", source: "1", target: "2", transition: "X" },
+        { id: "b", source: "2", target: "5", transition: "B" },
+        { id: "b-first", source: "1", target: "3", transition: "B" },
+        { id: "x2", source: "3", target: "4", transition: "X" },
+        { id: "b-second", source: "4", target: "5", transition: "B" },
+      ],
+      {
+        requestedPathCount: 5,
+        constraints: { declare: [{
+          id: "alternate-succession",
+          template: "alternate-succession",
+          enabled: true,
+          activation: groupForTest("A"),
+          target: groupForTest("B"),
+        }] },
+      },
+    ));
+    expect(result.paths.map((path) => path.edgeIds)).toEqual([["a", "x", "b"]]);
   });
 
 });

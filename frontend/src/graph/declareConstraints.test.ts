@@ -19,7 +19,7 @@ const predicate = (name: string): DeclarePredicateGroup => ({
 
 describe("Declare template registry", () => {
   it("contains the complete planned template catalog with unique IDs", () => {
-    expect(DECLARE_TEMPLATE_DEFINITIONS).toHaveLength(30);
+    expect(DECLARE_TEMPLATE_DEFINITIONS).toHaveLength(27);
     const ids = DECLARE_TEMPLATE_DEFINITIONS.map((definition) => definition.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
@@ -39,7 +39,7 @@ describe("Declare template registry", () => {
     });
     expect(getDeclareTemplateDefinition("alternate-succession")).toMatchObject({
       category: "bidirectional",
-      requiredRoles: ["activation", "target", "between"],
+      requiredRoles: ["activation", "target"],
     });
   });
 });

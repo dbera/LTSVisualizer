@@ -35,9 +35,6 @@ function constraintFor(template: DeclareTemplateId): DeclareConstraint {
     target: definition.requiredRoles.includes("target")
       ? group("B")
       : undefined,
-    between: definition.requiredRoles.includes("between")
-      ? group("C")
-      : undefined,
     count: definition.supportsCount ? 1 : undefined,
   };
 }
