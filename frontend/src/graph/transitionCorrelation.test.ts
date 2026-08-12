@@ -256,3 +256,53 @@ describe("evaluateCorrelationCondition", () => {
     );
   });
 });
+
+describe("stable scalar correlation aliases", () => {
+  it("binds a scalar under a stable ID and resolves it after a display-name rename", () => {
+    const capture = captureActivationValues(
+      [{ id: "alias_order_id", alias: "renamedOrderId", source: "inputs", path: ["order", "id"] }],
+      { inputs: { order: { id: 42 } } },
+    );
+    expect(capture).toEqual({ bindings: { alias_order_id: 42 }, errors: [] });
+    expect(
+      evaluateCorrelationCondition(
+        {
+          type: "comparison",
+          left: { kind: "target", source: "outputs", path: ["completed", "id"] },
+          operator: "=",
+          right: { kind: "activation", aliasId: "alias_order_id" },
+        },
+        { outputs: { completed: { id: 42 } } },
+        capture.bindings,
+      ),
+    ).toEqual({ matches: true, errors: [] });
+  });
+
+  it("rejects object and array capture values for scalar aliases", () => {
+    const definitions = [
+      { id: "alias_order", alias: "order", source: "inputs" as const, path: ["order"] },
+      { id: "alias_ids", alias: "ids", source: "inputs" as const, path: ["ids"] },
+    ];
+    const result = captureActivationValues(definitions, {
+      inputs: { order: { id: 42 }, ids: [42, 99] },
+    });
+    expect(result.bindings).toEqual({});
+    expect(result.errors).toEqual([
+      "Capture $order must resolve to exactly one scalar value.",
+      "Capture $ids must resolve to exactly one scalar value.",
+    ]);
+  });
+
+  it("validates duplicate and malformed stable IDs", () => {
+    expect(
+      validateCaptureDefinitions([
+        { id: "bad-id", alias: "first", source: "inputs", path: ["id"] },
+        { id: "shared", alias: "second", source: "inputs", path: ["id"] },
+        { id: "shared", alias: "third", source: "inputs", path: ["id"] },
+      ]),
+    ).toEqual([
+      "captures[0].id must start with a letter or underscore and contain only letters, numbers, and underscores.",
+      "Duplicate capture ID: shared.",
+    ]);
+  });
+});

@@ -266,6 +266,9 @@ function parseCaptureDefinition(
 ): CaptureDefinition {
   const capture = requireObject(value, location);
   return {
+    ...(capture.id !== undefined
+      ? { id: requireNonEmptyString(capture.id, `${location}.id`) }
+      : {}),
     alias: requireString(capture.alias, `${location}.alias`),
     source: parseDataSource(capture.source, `${location}.source`),
     path: parseDataPath(capture.path, `${location}.path`),
@@ -283,11 +286,24 @@ function parseCorrelationReference(
         kind: "literal",
         value: parseJsonValue(reference.value, `${location}.value`),
       };
-    case "activation":
+    case "activation": {
+      const aliasId = reference.aliasId;
+      const alias = reference.alias;
+      if (aliasId === undefined && alias === undefined) {
+        throw new DeclareConstraintJsonError(
+          `${location} must contain aliasId or legacy alias.`,
+        );
+      }
       return {
         kind: "activation",
-        alias: requireString(reference.alias, `${location}.alias`),
+        ...(aliasId !== undefined
+          ? { aliasId: requireNonEmptyString(aliasId, `${location}.aliasId`) }
+          : {}),
+        ...(alias !== undefined
+          ? { alias: requireNonEmptyString(alias, `${location}.alias`) }
+          : {}),
       };
+    }
     case "target":
       return {
         kind: "target",

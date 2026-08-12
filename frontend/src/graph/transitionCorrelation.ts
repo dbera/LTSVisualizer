@@ -8,6 +8,9 @@ import {
 } from "./transitionConditions";
 
 export type CaptureDefinition = {
+  /** Stable identifier used by new alias references. Legacy captures may omit it. */
+  id?: string;
+  /** User-facing alias name. */
   alias: string;
   source: DataSource;
   path: DataPathSegment[];
@@ -27,7 +30,10 @@ export type CorrelationValueReference =
     }
   | {
       kind: "activation";
-      alias: string;
+      /** Stable capture ID for new documents. */
+      aliasId?: string;
+      /** Legacy/name-based reference retained for backward compatibility. */
+      alias?: string;
     }
   | {
       kind: "target";
@@ -75,27 +81,6 @@ type ResolvedReference = {
 
 const ALIAS_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-function isJsonValue(value: unknown): value is JsonValue {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
-    return true;
-  }
-
-  if (Array.isArray(value)) {
-    return value.every(isJsonValue);
-  }
-
-  if (typeof value === "object") {
-    return Object.values(value as Record<string, unknown>).every(isJsonValue);
-  }
-
-  return false;
-}
-
 function deepEqual(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) {
     return true;
@@ -138,6 +123,7 @@ export function validateCaptureDefinitions(
 ): string[] {
   const errors: string[] = [];
   const aliases = new Set<string>();
+  const ids = new Set<string>();
 
   definitions.forEach((definition, index) => {
     const location = `captures[${index}]`;
@@ -150,6 +136,17 @@ export function validateCaptureDefinitions(
       errors.push(`Duplicate capture alias: $${definition.alias}.`);
     }
     aliases.add(definition.alias);
+    if (definition.id !== undefined) {
+      if (!ALIAS_PATTERN.test(definition.id)) {
+        errors.push(
+          `${location}.id must start with a letter or underscore and contain only letters, numbers, and underscores.`,
+        );
+      }
+      if (ids.has(definition.id)) {
+        errors.push(`Duplicate capture ID: ${definition.id}.`);
+      }
+      ids.add(definition.id);
+    }
   });
 
   return errors;
@@ -174,11 +171,16 @@ export function captureActivationValues(
       errors.push(`Capture $${definition.alias} could not resolve its data path.`);
       return;
     }
-    if (!isJsonValue(resolved.value)) {
-      errors.push(`Capture $${definition.alias} did not resolve to JSON data.`);
+    if (
+      resolved.value !== null &&
+      typeof resolved.value !== "string" &&
+      typeof resolved.value !== "number" &&
+      typeof resolved.value !== "boolean"
+    ) {
+      errors.push(`Capture $${definition.alias} must resolve to exactly one scalar value.`);
       return;
     }
-    bindings[definition.alias] = structuredClone(resolved.value);
+    bindings[definition.id ?? definition.alias] = resolved.value;
   });
 
   return { bindings: errors.length === 0 ? bindings : {}, errors };
@@ -190,8 +192,14 @@ function validateReference(
   insideItem: boolean,
   location: string,
 ): string[] {
-  if (reference.kind === "activation" && !availableAliases.has(reference.alias)) {
-    return [`${location} references unknown activation variable $${reference.alias}.`];
+  if (reference.kind === "activation") {
+    const key = reference.aliasId ?? reference.alias;
+    if (!key) {
+      return [`${location} must specify aliasId or legacy alias.`];
+    }
+    if (!availableAliases.has(key)) {
+      return [`${location} references unknown activation variable $${key}.`];
+    }
   }
   if (reference.kind === "item" && !insideItem) {
     return [`${location} uses an item reference outside contains-item.`];
@@ -271,10 +279,12 @@ function resolveReference(
   switch (reference.kind) {
     case "literal":
       return { found: true, value: reference.value };
-    case "activation":
-      return Object.prototype.hasOwnProperty.call(bindings, reference.alias)
-        ? { found: true, value: bindings[reference.alias] }
+    case "activation": {
+      const key = reference.aliasId ?? reference.alias;
+      return key !== undefined && Object.prototype.hasOwnProperty.call(bindings, key)
+        ? { found: true, value: bindings[key] }
         : { found: false, value: undefined };
+    }
     case "target":
       return resolveDataPath(target[reference.source], reference.path);
     case "item":
