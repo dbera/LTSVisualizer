@@ -9,6 +9,7 @@ import {
 import { validateExecutableDeclareConstraint } from "./declareMonitorFactory";
 import TransitionPicker from "./TransitionPicker";
 import TransitionConditionEditor from "./TransitionConditionEditor";
+import CorrelationAliasEditor from "./CorrelationAliasEditor";
 import type { TransitionOption } from "./transitionCatalog";
 import type { TransitionDataCatalogue } from "./transitionDataCatalogue";
 
@@ -88,6 +89,9 @@ export default function DeclareConstraintBuilder({
           ? constraint.target ?? group()
           : undefined,
         count: definition.supportsCount ? constraint.count ?? 1 : undefined,
+        correlation: definition.supportsCorrelation
+          ? constraint.correlation
+          : undefined,
       };
     });
   }
@@ -259,6 +263,18 @@ export default function DeclareConstraintBuilder({
                   }
                 />
                   </>
+                )}
+                {definition.supportsCorrelation && definition.requiredRoles.includes("target") && (
+                  <CorrelationAliasEditor
+                    constraint={constraint}
+                    activationTransitionName={transitionValue(constraint, "activation")}
+                    targetTransitionName={transitionValue(constraint, "target")}
+                    catalogue={transitionDataCatalogue}
+                    disabled={disabled}
+                    onChange={(nextConstraint) =>
+                      update(constraint.id, () => nextConstraint)
+                    }
+                  />
                 )}
                 {definition.supportsCount && (
                   <label>
