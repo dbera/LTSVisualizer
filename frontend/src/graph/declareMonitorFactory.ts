@@ -71,7 +71,7 @@ function requireGroup(
 function collectActivationAliases(constraint: DeclareConstraint): string[] {
   return (
     constraint.activation?.predicates.flatMap((predicate) =>
-      (predicate.captures ?? []).map((capture) => capture.alias),
+      (predicate.captures ?? []).map((capture) => capture.id ?? capture.alias),
     ) ?? []
   );
 }

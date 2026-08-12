@@ -228,3 +228,66 @@ describe("compileDeclareConstraints", () => {
     ).toHaveLength(1);
   });
 });
+
+describe("stable activation alias IDs", () => {
+  const constraintWithStableAlias = (template: DeclareConstraint["template"]): DeclareConstraint => ({
+    id: `stable-${template}`,
+    template,
+    enabled: true,
+    activation: {
+      relation: "or",
+      predicates: [{
+        transition: { operator: "equals", value: "A" },
+        captures: [{
+          id: "alias_order_id",
+          alias: "renamedOrderId",
+          source: "inputs",
+          path: ["order", "id"],
+        }],
+      }],
+    },
+    target: {
+      relation: "or",
+      predicates: [{ transition: { operator: "equals", value: "B" } }],
+    },
+    correlation: {
+      type: "comparison",
+      left: { kind: "target", source: "outputs", path: ["order", "id"] },
+      operator: "=",
+      right: { kind: "activation", aliasId: "alias_order_id" },
+    },
+  });
+
+  it("validates a stable ID reference independently of the display name", () => {
+    expect(validateExecutableDeclareConstraint(constraintWithStableAlias("response"))).toEqual([]);
+  });
+
+  it.each(["response", "precedence", "responded-existence", "succession"] as const)(
+    "executes %s with stable alias IDs",
+    (template) => {
+      const monitor = createDeclareMonitor(constraintWithStableAlias(template));
+      let state = monitor.initialState();
+      const activation = { transition: "A", inputs: { order: { id: 42 } } };
+      const matchingTarget = { transition: "B", outputs: { order: { id: 42 } } };
+      const events = template === "precedence"
+        ? [activation, matchingTarget]
+        : [activation, matchingTarget];
+      for (const event of events) state = monitor.advance(state, event);
+      expect(monitor.status(state)).toEqual({ viable: true, accepting: true });
+    },
+  );
+
+  it("keeps different activation bindings distinguishable at runtime", () => {
+    const monitor = createDeclareMonitor(constraintWithStableAlias("response"));
+    let state = monitor.initialState();
+    state = monitor.advance(state, { transition: "A", inputs: { order: { id: 42 } } });
+    state = monitor.advance(state, { transition: "A", inputs: { order: { id: 99 } } });
+    const before = monitor.stateKey(state);
+    state = monitor.advance(state, { transition: "B", outputs: { order: { id: 42 } } });
+    const after = monitor.stateKey(state);
+    expect(after).not.toBe(before);
+    expect(monitor.status(state)).toEqual({ viable: true, accepting: false });
+    state = monitor.advance(state, { transition: "B", outputs: { order: { id: 99 } } });
+    expect(monitor.status(state)).toEqual({ viable: true, accepting: true });
+  });
+});
