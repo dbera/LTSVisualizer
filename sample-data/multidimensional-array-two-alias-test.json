@@ -1,0 +1,755 @@
+{
+  "format": "ltsvisualizer",
+  "version": 1,
+  "type": "graph",
+  "metadata": {
+    "title": "Multidimensional array Declare test graph"
+  },
+  "nodes": [
+    {
+      "id": "0",
+      "marking_raw": null,
+      "marking": {
+        "state": [
+          {
+            "step": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "1",
+      "marking_raw": null,
+      "marking": {
+        "state": [
+          {
+            "step": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "2",
+      "marking_raw": null,
+      "marking": {
+        "state": [
+          {
+            "step": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "3",
+      "marking_raw": null,
+      "marking": {
+        "state": [
+          {
+            "step": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "4",
+      "marking_raw": null,
+      "marking": {
+        "state": [
+          {
+            "step": 4
+          }
+        ]
+      }
+    },
+    {
+      "id": "5",
+      "marking_raw": null,
+      "marking": {
+        "state": [
+          {
+            "step": 5
+          }
+        ]
+      }
+    },
+    {
+      "id": "6",
+      "marking_raw": null,
+      "marking": {
+        "state": [
+          {
+            "step": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "7",
+      "marking_raw": null,
+      "marking": {
+        "state": [
+          {
+            "step": 7
+          }
+        ]
+      }
+    },
+    {
+      "id": "8",
+      "marking_raw": null,
+      "marking": {
+        "state": [
+          {
+            "step": 8
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0",
+      "source": "0",
+      "target": "1",
+      "transition": "Start",
+      "color": "green",
+      "inputs_raw": null,
+      "inputs": {
+        "requestBatches": [
+          [
+            {
+              "userName": "abc",
+              "roles": [
+                "admin",
+                "tester"
+              ],
+              "scores": [
+                [
+                  1,
+                  2
+                ],
+                [
+                  3,
+                  4
+                ]
+              ],
+              "addresses": [
+                {
+                  "city": "Eindhoven",
+                  "codes": [
+                    5611,
+                    5612
+                  ]
+                }
+              ]
+            },
+            {
+              "userName": "xyz",
+              "roles": [
+                "guest"
+              ],
+              "scores": [
+                [
+                  5,
+                  6
+                ]
+              ],
+              "addresses": [
+                {
+                  "city": "Den Bosch",
+                  "codes": [
+                    5211
+                  ]
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "userName": "def",
+              "roles": [
+                "operator"
+              ],
+              "scores": [
+                [
+                  7,
+                  8
+                ]
+              ],
+              "addresses": []
+            }
+          ]
+        ],
+        "matrix": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ]
+        ],
+        "flags": [
+          true,
+          false
+        ],
+        "labels": [
+          "alpha",
+          "beta"
+        ],
+        "empty": []
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "started": [
+          {
+            "caseId": "C-1",
+            "participants": [
+              "abc",
+              "xyz"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "e1",
+      "source": "1",
+      "target": "2",
+      "transition": "Login",
+      "color": "blue",
+      "inputs_raw": null,
+      "inputs": {
+        "credentials": [
+          {
+            "userName": "abc",
+            "factors": [
+              {
+                "kind": "password",
+                "valid": true
+              },
+              {
+                "kind": "otp",
+                "valid": true
+              }
+            ]
+          }
+        ]
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "loginRequest": [
+          {
+            "userName": "abc",
+            "success": true,
+            "attempts": 1,
+            "roles": [
+              "admin",
+              "tester"
+            ],
+            "permissions": [
+              {
+                "resource": "dashboard",
+                "actions": [
+                  "read",
+                  "write"
+                ]
+              },
+              {
+                "resource": "settings",
+                "actions": [
+                  "read"
+                ]
+              }
+            ]
+          },
+          {
+            "userName": "xyz",
+            "success": false,
+            "attempts": 3,
+            "roles": [
+              "guest"
+            ],
+            "permissions": [
+              {
+                "resource": "dashboard",
+                "actions": [
+                  "read"
+                ]
+              }
+            ]
+          }
+        ],
+        "resultCube": [
+          [
+            [
+              "A",
+              "B"
+            ],
+            [
+              "C"
+            ]
+          ],
+          [
+            [
+              "D"
+            ]
+          ]
+        ],
+        "numberMatrix": [
+          [
+            10,
+            20
+          ],
+          [
+            30,
+            40
+          ]
+        ],
+        "objectMatrix": [
+          [
+            {
+              "code": "X",
+              "value": 10
+            },
+            {
+              "code": "Y",
+              "value": 20
+            }
+          ],
+          [
+            {
+              "code": "Z",
+              "value": 30
+            }
+          ]
+        ],
+        "emptyTokens": []
+      }
+    },
+    {
+      "id": "e2",
+      "source": "2",
+      "target": "3",
+      "transition": "Audit",
+      "color": "orange",
+      "inputs_raw": null,
+      "inputs": {
+        "events": [
+          [
+            {
+              "type": "login",
+              "severities": [
+                1,
+                2
+              ]
+            },
+            {
+              "type": "access",
+              "severities": [
+                3
+              ]
+            }
+          ]
+        ]
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "auditRows": [
+          [
+            {
+              "userName": "abc",
+              "status": "ok"
+            },
+            {
+              "userName": "xyz",
+              "status": "failed"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "e3",
+      "source": "3",
+      "target": "4",
+      "transition": "Login",
+      "color": "blue",
+      "inputs_raw": null,
+      "inputs": {
+        "credentials": [
+          {
+            "userName": "xyz",
+            "factors": [
+              {
+                "kind": "password",
+                "valid": false
+              }
+            ]
+          }
+        ]
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "loginRequest": [
+          {
+            "userName": "xyz",
+            "success": false,
+            "attempts": 4,
+            "roles": [
+              "guest"
+            ],
+            "permissions": []
+          }
+        ],
+        "resultCube": [
+          [
+            [
+              "A",
+              "B"
+            ],
+            [
+              "C"
+            ]
+          ],
+          [
+            [
+              "D"
+            ]
+          ]
+        ],
+        "numberMatrix": [
+          [
+            10,
+            20
+          ],
+          [
+            30,
+            40
+          ]
+        ],
+        "objectMatrix": [
+          [
+            {
+              "code": "X",
+              "value": 10
+            },
+            {
+              "code": "Y",
+              "value": 20
+            }
+          ],
+          [
+            {
+              "code": "Z",
+              "value": 30
+            }
+          ]
+        ],
+        "emptyTokens": []
+      }
+    },
+    {
+      "id": "e4",
+      "source": "4",
+      "target": "5",
+      "transition": "Notify",
+      "color": "purple",
+      "inputs_raw": null,
+      "inputs": {
+        "recipients": [
+          [
+            "abc",
+            "team-a"
+          ],
+          [
+            "auditor"
+          ]
+        ]
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "messages": [
+          [
+            {
+              "channel": "email",
+              "delivered": true
+            },
+            {
+              "channel": "sms",
+              "delivered": false
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "e5",
+      "source": "5",
+      "target": "6",
+      "transition": "Login",
+      "color": "blue",
+      "inputs_raw": null,
+      "inputs": {
+        "credentials": [
+          {
+            "userName": "abc",
+            "factors": [
+              {
+                "kind": "password",
+                "valid": true
+              }
+            ]
+          }
+        ]
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "loginRequest": [
+          {
+            "userName": "abc",
+            "success": true,
+            "attempts": 1,
+            "roles": [
+              "admin",
+              "tester"
+            ],
+            "permissions": [
+              {
+                "resource": "dashboard",
+                "actions": [
+                  "read",
+                  "write"
+                ]
+              },
+              {
+                "resource": "settings",
+                "actions": [
+                  "read"
+                ]
+              }
+            ]
+          },
+          {
+            "userName": "xyz",
+            "success": false,
+            "attempts": 3,
+            "roles": [
+              "guest"
+            ],
+            "permissions": [
+              {
+                "resource": "dashboard",
+                "actions": [
+                  "read"
+                ]
+              }
+            ]
+          }
+        ],
+        "resultCube": [
+          [
+            [
+              "A",
+              "B"
+            ],
+            [
+              "C"
+            ]
+          ],
+          [
+            [
+              "D"
+            ]
+          ]
+        ],
+        "numberMatrix": [
+          [
+            10,
+            20
+          ],
+          [
+            30,
+            40
+          ]
+        ],
+        "objectMatrix": [
+          [
+            {
+              "code": "X",
+              "value": 10
+            },
+            {
+              "code": "Y",
+              "value": 20
+            }
+          ],
+          [
+            {
+              "code": "Z",
+              "value": 30
+            }
+          ]
+        ],
+        "emptyTokens": []
+      }
+    },
+    {
+      "id": "e6",
+      "source": "6",
+      "target": "7",
+      "transition": "Complete",
+      "color": "darkgreen",
+      "inputs_raw": null,
+      "inputs": {
+        "cases": [
+          {
+            "caseId": "C-1",
+            "checkpoints": [
+              [
+                "login",
+                "audit"
+              ],
+              [
+                "notify"
+              ]
+            ],
+            "requestedBy": "abc"
+          }
+        ]
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "completed": [
+          {
+            "caseId": "C-1",
+            "status": "done",
+            "metrics": {
+              "durations": [
+                12,
+                7
+              ],
+              "matrix": [
+                [
+                  1.5,
+                  2.5
+                ],
+                [
+                  3.5
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "e7",
+      "source": "7",
+      "target": "8",
+      "transition": "Archive",
+      "color": "gray",
+      "inputs_raw": null,
+      "inputs": {
+        "items": [
+          [
+            {
+              "caseId": "C-1",
+              "tags": [
+                "done",
+                "retained"
+              ]
+            }
+          ]
+        ]
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "archive": [
+          {
+            "caseId": "C-1",
+            "locations": [
+              [
+                "primary",
+                "eu"
+              ],
+              [
+                "backup",
+                "nl"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "e8",
+      "source": "1",
+      "target": "5",
+      "transition": "SkipToComplete",
+      "color": "red",
+      "inputs_raw": null,
+      "inputs": {
+        "reason": "test-negative-path"
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "skipped": [
+          {
+            "value": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "e9",
+      "source": "2",
+      "target": "4",
+      "transition": "Noise",
+      "color": "brown",
+      "inputs_raw": null,
+      "inputs": {
+        "values": [
+          [
+            99
+          ]
+        ]
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "values": [
+          [
+            100
+          ]
+        ]
+      }
+    },
+    {
+      "id": "e10",
+      "source": "4",
+      "target": "8",
+      "transition": "Abort",
+      "color": "red",
+      "inputs_raw": null,
+      "inputs": {
+        "errors": [
+          {
+            "code": "E-1",
+            "details": [
+              [
+                "fatal"
+              ]
+            ]
+          }
+        ]
+      },
+      "outputs_raw": null,
+      "outputs": {
+        "aborted": [
+          true
+        ]
+      }
+    }
+  ]
+}

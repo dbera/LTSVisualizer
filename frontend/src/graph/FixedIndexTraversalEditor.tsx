@@ -1,87 +1,73 @@
 import type { DataPathSegment } from "./transitionConditions";
-import {
-  formatConfiguredPath,
-  materializeIndexedPath,
-  normalizeIndexedPathForEditing,
-  type ArrayAccess,
-} from "./transitionConditionEditorModel";
 
 type Props = {
-  source: "inputs" | "outputs";
-  cataloguePath: readonly DataPathSegment[];
-  executablePath: readonly DataPathSegment[];
+  path: readonly DataPathSegment[];
   disabled?: boolean;
   onChange: (path: DataPathSegment[]) => void;
 };
 
+function arrayLevelCount(path: readonly DataPathSegment[]): number {
+  return path.filter((segment) => segment === "[]" || typeof segment === "number").length;
+}
+
+function indexes(path: readonly DataPathSegment[]): number[] {
+  return path
+    .filter((segment) => segment === "[]" || typeof segment === "number")
+    .map((segment) => typeof segment === "number" ? segment : 0);
+}
+
+function withIndexes(
+  path: readonly DataPathSegment[],
+  nextIndexes: readonly number[],
+): DataPathSegment[] {
+  let level = 0;
+  return path.map((segment) => {
+    if (segment === "[]" || typeof segment === "number") {
+      return nextIndexes[level++] ?? 0;
+    }
+    return segment;
+  });
+}
+
 export default function FixedIndexTraversalEditor({
-  source,
-  cataloguePath,
-  executablePath,
+  path,
   disabled = false,
   onChange,
 }: Props) {
-  const normalized = normalizeIndexedPathForEditing(executablePath);
-  const arrayAccesses: ArrayAccess[] = cataloguePath.reduce<ArrayAccess[]>(
-    (accesses, segment, index) => {
-      if (segment !== "[]") return accesses;
-      const normalizedAccess = normalized.arrayAccesses[accesses.length];
-      const executableSegment = executablePath[index];
-      const value = normalizedAccess?.mode === "indexed-item"
-        ? normalizedAccess.index
-        : typeof executableSegment === "number"
-          ? executableSegment
-          : 0;
-      return [...accesses, { mode: "indexed-item", index: value }];
-    },
-    [],
-  );
-
-  if (arrayAccesses.length === 0) return null;
-
-  function updateIndex(level: number, index: number) {
-    const next = arrayAccesses.map((access, currentLevel) =>
-      currentLevel === level ? { mode: "indexed-item" as const, index } : access,
-    );
-    onChange(materializeIndexedPath(cataloguePath, next));
-  }
+  const count = arrayLevelCount(path);
+  if (count === 0) return null;
+  const currentIndexes = indexes(path);
 
   return (
-    <fieldset className="correlation-array-traversal">
+    <fieldset className="fixed-index-traversal">
       <legend>Array traversal</legend>
-      <div className="transition-array-levels">
-        {arrayAccesses.map((access, level) => (
-          <div className="transition-array-level" key={level}>
-            <span className="transition-array-level-number">{level + 1}</span>
-            <div className="transition-array-level-controls">
-              <label>
-                Level {level + 1} of {arrayAccesses.length}
-                <select value="indexed-item" disabled>
-                  <option value="indexed-item">Item at zero-based index</option>
-                </select>
-              </label>
-              <label className="transition-array-index">
-                Zero-based index
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  disabled={disabled}
-                  value={access.mode === "indexed-item" ? access.index : 0}
-                  onChange={(event) => {
-                    const parsed = Number.parseInt(event.target.value, 10);
-                    updateIndex(level, Number.isFinite(parsed) ? Math.max(0, parsed) : 0);
-                  }}
-                />
-              </label>
-            </div>
-          </div>
-        ))}
-      </div>
-      <p className="transition-data-picker-selection">
-        Concrete scalar path:{" "}
-        <code>{formatConfiguredPath(source, cataloguePath, arrayAccesses)}</code>
-      </p>
+      {currentIndexes.map((index, level) => (
+        <div className="fixed-index-level" key={level}>
+          <span>{level + 1}</span>
+          <label>
+            Level {level + 1} of {count}
+            <select disabled value="indexed-item">
+              <option value="indexed-item">Item at zero-based index</option>
+            </select>
+          </label>
+          <label>
+            Zero-based index
+            <input
+              type="number"
+              min={0}
+              step={1}
+              disabled={disabled}
+              value={index}
+              onChange={(event) => {
+                const parsed = Number.parseInt(event.target.value, 10);
+                const next = [...currentIndexes];
+                next[level] = Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+                onChange(withIndexes(path, next));
+              }}
+            />
+          </label>
+        </div>
+      ))}
     </fieldset>
   );
 }

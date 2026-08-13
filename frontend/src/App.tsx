@@ -10,6 +10,7 @@ import {
 } from "react";
 import cytoscape from "cytoscape";
 import "./App.css";
+import "./CorrelationExplanation.css";
 import JsonViewer, { type JsonValue } from "./components/JsonViewer";
 import DeclareConstraintBuilder from "./graph/DeclareConstraintBuilder";
 import type { DeclareConstraint } from "./graph/declareConstraints";
@@ -99,6 +100,12 @@ interface GraphViewSnapshot {
 
 const TERMINAL_PAGE_SIZE = 100;
 const SCC_PAGE_SIZE = 100;
+function formatCorrelationEvidenceValue(value: unknown, found: boolean): string {
+  if (!found) return "<not found>";
+  const serialized = JSON.stringify(value);
+  return serialized === undefined ? String(value) : serialized;
+}
+
 function readStoredSidePanelWidth(): number {
   return parseStoredSidePanelWidth(
     window.localStorage.getItem(SIDE_PANEL_WIDTH_STORAGE_KEY),
@@ -2559,6 +2566,49 @@ function App() {
                                                 </li>
                                               ))}
                                             </ol>
+                                          )}
+                                          {explanation.correlations.length > 0 && (
+                                            <div className="constraint-correlation-evidence">
+                                              <div className="constraint-correlation-heading">
+                                                <strong>Correlation matched</strong>
+                                                <span>Alias evidence</span>
+                                              </div>
+                                              {explanation.correlations.map((correlation, correlationIndex) => (
+                                                <div className="constraint-correlation-pair" key={`${correlation.activationStepNumber}-${correlation.targetStepNumber}-${correlationIndex}`}>
+                                                  {correlation.comparisons.map((comparison, comparisonIndex) => {
+                                                    const activationReference = comparison.left.kind === "activation" ? comparison.left : comparison.right.kind === "activation" ? comparison.right : undefined;
+                                                    const targetReference = comparison.left.kind === "target" ? comparison.left : comparison.right.kind === "target" ? comparison.right : undefined;
+                                                    return (
+                                                      <div className="constraint-correlation-match" key={`${comparisonIndex}-${comparison.left.label}-${comparison.right.label}`}>
+                                                        {activationReference ? (
+                                                          <>
+                                                            <div className="constraint-correlation-value-row">
+                                                              <code>${activationReference.alias ?? "alias"}</code>
+                                                              <span>=</span>
+                                                              <strong>{formatCorrelationEvidenceValue(activationReference.value, activationReference.found)}</strong>
+                                                              <span className="constraint-correlation-badge">Matched</span>
+                                                            </div>
+                                                            <div className="constraint-correlation-provenance">
+                                                              <p>Captured at step {correlation.activationStepNumber} from <code>{activationReference.path ?? activationReference.label}</code></p>
+                                                              <p>Matched at step {correlation.targetStepNumber} against <code>{targetReference?.path ?? targetReference?.label ?? "target value"}</code></p>
+                                                            </div>
+                                                          </>
+                                                        ) : (
+                                                          <div className="constraint-correlation-value-row">
+                                                            <code>{comparison.left.label}</code>
+                                                            <strong>{formatCorrelationEvidenceValue(comparison.left.value, comparison.left.found)}</strong>
+                                                            <span>{comparison.operator}</span>
+                                                            <code>{comparison.right.label}</code>
+                                                            <strong>{formatCorrelationEvidenceValue(comparison.right.value, comparison.right.found)}</strong>
+                                                            <span className="constraint-correlation-badge">Matched</span>
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                    );
+                                                  })}
+                                                </div>
+                                              ))}
+                                            </div>
                                           )}
                                         </section>
                                       ))}

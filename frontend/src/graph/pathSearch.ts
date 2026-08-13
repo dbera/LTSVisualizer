@@ -1,6 +1,11 @@
 import type { DeclareConstraint, DeclareTemplateId } from "./declareConstraints";
 import { evaluateDeclarePredicateGroup } from "./declarePredicates";
-import { evaluateCorrelationCondition, type ActivationBindings } from "./transitionCorrelation";
+import {
+  explainCorrelationCondition,
+  evaluateCorrelationCondition,
+  type ActivationBindings,
+  type CorrelationComparisonEvidence,
+} from "./transitionCorrelation";
 import {
   advanceMonitorSet,
   createMonitorSet,
@@ -59,6 +64,11 @@ export type ConstraintExplanationEvent = {
   edgeId: string;
   transition: string;
 };
+export type ConstraintCorrelationExplanation = {
+  activationStepNumber: number;
+  targetStepNumber: number;
+  comparisons: CorrelationComparisonEvidence[];
+};
 export type ConstraintExplanation = {
   constraintId: string;
   template: DeclareTemplateId;
@@ -66,6 +76,7 @@ export type ConstraintExplanation = {
   exercised: boolean;
   summary: string;
   events: ConstraintExplanationEvent[];
+  correlations: ConstraintCorrelationExplanation[];
 };
 export type BoundedPath = {
   startNodeId: string;
@@ -477,6 +488,7 @@ function explainConstraint(
   const targets = predicateMatches(constraint.target, edges);
   const exercised = edges.some((edge) => compiled.isExercisedBy(edge));
   const events: ConstraintExplanationEvent[] = [];
+  const correlations: ConstraintCorrelationExplanation[] = [];
   let summary: string;
   switch (constraint.template) {
     case "at-least":
@@ -524,7 +536,26 @@ function explainConstraint(
           return orderOkay && chainOkay &&
             matchesCorrelation(constraint, activation, target);
         });
-        if (fulfillment) events.push(event("fulfillment", fulfillment));
+        if (fulfillment) {
+          events.push(event("fulfillment", fulfillment));
+          if (constraint.correlation) {
+            const correlation = explainCorrelationCondition(
+              constraint.correlation,
+              fulfillment.edge,
+              activation.bindings,
+              constraint.activation?.predicates.flatMap(
+                (predicate) => predicate.captures ?? [],
+              ) ?? [],
+            );
+            if (correlation.matches && correlation.comparisons.length > 0) {
+              correlations.push({
+                activationStepNumber: activation.stepNumber,
+                targetStepNumber: fulfillment.stepNumber,
+                comparisons: correlation.comparisons,
+              });
+            }
+          }
+        }
       }
       if (constraint.template.includes("succession")) {
         summary = activations.length === 0 && targets.length === 0
@@ -555,6 +586,23 @@ function explainConstraint(
               : "preceding-support",
             support,
           ));
+          if (constraint.correlation) {
+            const correlation = explainCorrelationCondition(
+              constraint.correlation,
+              target.edge,
+              support.bindings,
+              constraint.activation?.predicates.flatMap(
+                (predicate) => predicate.captures ?? [],
+              ) ?? [],
+            );
+            if (correlation.matches && correlation.comparisons.length > 0) {
+              correlations.push({
+                activationStepNumber: support.stepNumber,
+                targetStepNumber: target.stepNumber,
+                comparisons: correlation.comparisons,
+              });
+            }
+          }
         }
         events.push(event("target", target));
       }
@@ -594,6 +642,7 @@ function explainConstraint(
     exercised,
     summary,
     events,
+    correlations,
   };
 }
 function explainAcceptedPath(

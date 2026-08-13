@@ -74,6 +74,26 @@ export type CorrelationEvaluation = {
   errors: string[];
 };
 
+export type CorrelationReferenceEvidence = {
+  kind: CorrelationValueReference["kind"];
+  label: string;
+  alias?: string;
+  path?: string;
+  found: boolean;
+  value?: unknown;
+};
+
+export type CorrelationComparisonEvidence = {
+  operator: Extract<CorrelationCondition, { type: "comparison" }>["operator"];
+  left: CorrelationReferenceEvidence;
+  right: CorrelationReferenceEvidence;
+  matches: boolean;
+};
+
+export type CorrelationExplanation = CorrelationEvaluation & {
+  comparisons: CorrelationComparisonEvidence[];
+};
+
 type ResolvedReference = {
   found: boolean;
   value: unknown;
@@ -390,4 +410,170 @@ export function evaluateCorrelationCondition(
     ),
     errors: [],
   };
+}
+
+
+function formatEvidencePath(
+  source: DataSource,
+  path: readonly DataPathSegment[],
+): string {
+  let result = source;
+  for (const segment of path) {
+    if (segment === "[]") {
+      result += "[]";
+    } else if (typeof segment === "number") {
+      result += `[${segment}]`;
+    } else {
+      result += `.${segment}`;
+    }
+  }
+  return result;
+}
+
+function referenceEvidence(
+  reference: CorrelationValueReference,
+  target: TransitionData,
+  bindings: ActivationBindings,
+  capturesByKey: ReadonlyMap<string, CaptureDefinition>,
+  item: unknown,
+): CorrelationReferenceEvidence {
+  const resolved = resolveReference(reference, target, bindings, item);
+  let label: string;
+  switch (reference.kind) {
+    case "literal":
+      label = "literal";
+      break;
+    case "activation": {
+      const key = reference.aliasId ?? reference.alias ?? "unknown";
+      const capture = capturesByKey.get(key);
+      label = capture
+        ? `$${capture.alias} (${formatEvidencePath(capture.source, capture.path)})`
+        : `$${reference.alias ?? reference.aliasId ?? "unknown"}`;
+      break;
+    }
+    case "target":
+      label = formatEvidencePath(reference.source, reference.path);
+      break;
+    case "item":
+      label = `item${formatEvidencePath("inputs", reference.path).slice("inputs".length)}`;
+      break;
+  }
+  const capture = reference.kind === "activation"
+    ? capturesByKey.get(reference.aliasId ?? reference.alias ?? "")
+    : undefined;
+  const alias = reference.kind === "activation"
+    ? capture?.alias ?? reference.alias ?? reference.aliasId
+    : undefined;
+  const path = capture
+    ? formatEvidencePath(capture.source, capture.path)
+    : reference.kind === "target"
+      ? formatEvidencePath(reference.source, reference.path)
+      : undefined;
+  return {
+    kind: reference.kind,
+    label,
+    ...(alias ? { alias } : {}),
+    ...(path ? { path } : {}),
+    found: resolved.found,
+    ...(resolved.found ? { value: resolved.value } : {}),
+  };
+}
+
+function explainCorrelationAt(
+  condition: CorrelationCondition,
+  target: TransitionData,
+  bindings: ActivationBindings,
+  capturesByKey: ReadonlyMap<string, CaptureDefinition>,
+  item: unknown,
+): CorrelationExplanation {
+  switch (condition.type) {
+    case "comparison": {
+      const left = referenceEvidence(
+        condition.left,
+        target,
+        bindings,
+        capturesByKey,
+        item,
+      );
+      const right = referenceEvidence(
+        condition.right,
+        target,
+        bindings,
+        capturesByKey,
+        item,
+      );
+      const matches = evaluateComparison(
+        condition.operator,
+        { found: left.found, value: left.value },
+        { found: right.found, value: right.value },
+      );
+      return {
+        matches,
+        errors: [],
+        comparisons: [{ operator: condition.operator, left, right, matches }],
+      };
+    }
+    case "reference-exists":
+      return {
+        matches: evaluateCorrelationConditionAt(condition, target, bindings, item),
+        errors: [],
+        comparisons: [],
+      };
+    case "contains-item": {
+      const resolved = resolveDataPath(target[condition.source], condition.path);
+      if (!resolved.found || !Array.isArray(resolved.value)) {
+        return { matches: false, errors: [], comparisons: [] };
+      }
+      for (const candidate of resolved.value) {
+        const explanation = explainCorrelationAt(
+          condition.condition,
+          target,
+          bindings,
+          capturesByKey,
+          candidate,
+        );
+        if (explanation.matches) return explanation;
+      }
+      return { matches: false, errors: [], comparisons: [] };
+    }
+    case "group": {
+      const children = condition.conditions.map((child) =>
+        explainCorrelationAt(child, target, bindings, capturesByKey, item),
+      );
+      const matches = condition.operator === "and"
+        ? children.every((child) => child.matches)
+        : children.some((child) => child.matches);
+      const contributingChildren = condition.operator === "or" && matches
+        ? children.filter((child) => child.matches)
+        : children;
+      return {
+        matches,
+        errors: children.flatMap((child) => child.errors),
+        comparisons: contributingChildren.flatMap((child) => child.comparisons),
+      };
+    }
+  }
+}
+
+export function explainCorrelationCondition(
+  condition: CorrelationCondition,
+  target: TransitionData,
+  bindings: ActivationBindings,
+  captures: readonly CaptureDefinition[] = [],
+): CorrelationExplanation {
+  const errors = validateCorrelationCondition(condition, Object.keys(bindings));
+  if (errors.length > 0) {
+    return { matches: false, errors, comparisons: [] };
+  }
+  const capturesByKey = new Map<string, CaptureDefinition>();
+  for (const capture of captures) {
+    capturesByKey.set(capture.id ?? capture.alias, capture);
+  }
+  return explainCorrelationAt(
+    condition,
+    target,
+    bindings,
+    capturesByKey,
+    undefined,
+  );
 }

@@ -804,15 +804,136 @@ describe("findKShortestBoundedPaths", () => {
           { role: "activation", stepNumber: 2, edgeId: "login", transition: "Login" },
           { role: "fulfillment", stepNumber: 3, edgeId: "complete", transition: "Complete" },
         ],
+        correlations: [],
       },
       {
         constraintId: "audit-count", template: "at-least", status: "satisfied", exercised: true,
         summary: "Matched 1 time; required count 1.",
         events: [{ role: "match", stepNumber: 1, edgeId: "audit", transition: "Audit" }],
+        correlations: [],
       },
     ]);
   });
 
+
+  it("explains the scalar values used by a correlation alias", () => {
+    const result = findKShortestBoundedPaths({
+      nodeIds: ["0", "1", "2"],
+      edges: [
+        { id: "activation", source: "0", target: "1", transition: "Login", outputs: { numberMatrix: [[10, 20]] } },
+        { id: "target", source: "1", target: "2", transition: "Login", outputs: { numberMatrix: [[10, 30]] } },
+      ],
+      sourceNodeId: "0",
+      targetNodeId: "2",
+      requestedPathCount: 1,
+      maximumVisitsPerState: 1,
+      constraints: { declare: [{
+        id: "correlated-response",
+        template: "response",
+        enabled: true,
+        activation: { relation: "or", predicates: [{
+          transition: { operator: "equals", value: "Login" },
+          condition: { type: "source", source: "outputs", condition: { type: "comparison", path: ["numberMatrix", 0, 1], operator: "=", value: 20 } },
+          captures: [{ id: "capture_1", alias: "alias_1", source: "outputs", path: ["numberMatrix", 0, 0] }],
+        }] },
+        target: { relation: "or", predicates: [{
+          transition: { operator: "equals", value: "Login" },
+          condition: { type: "source", source: "outputs", condition: { type: "comparison", path: ["numberMatrix", 0, 1], operator: "=", value: 30 } },
+        }] },
+        correlation: {
+          type: "comparison",
+          left: { kind: "target", source: "outputs", path: ["numberMatrix", 0, 0] },
+          operator: "=",
+          right: { kind: "activation", aliasId: "capture_1" },
+        },
+      }] },
+    });
+
+    expect(result.paths).toHaveLength(1);
+    expect(result.paths[0].explanations?.[0].correlations).toEqual([{
+      activationStepNumber: 1,
+      targetStepNumber: 2,
+      comparisons: [{
+        operator: "=",
+        matches: true,
+        left: { kind: "target", label: "outputs.numberMatrix[0][0]", path: "outputs.numberMatrix[0][0]", found: true, value: 10 },
+        right: { kind: "activation", label: "$alias_1 (outputs.numberMatrix[0][0])", alias: "alias_1", path: "outputs.numberMatrix[0][0]", found: true, value: 10 },
+      }],
+    }]);
+  });
+
+  it("requires and explains multiple simultaneous target correlations", () => {
+    const result = findKShortestBoundedPaths({
+      nodeIds: ["0", "1", "2"],
+      edges: [
+        {
+          id: "start",
+          source: "0",
+          target: "1",
+          transition: "Start",
+          outputs: { started: [{ caseId: "C-1", participants: ["abc"] }] },
+        },
+        {
+          id: "complete",
+          source: "1",
+          target: "2",
+          transition: "Complete",
+          inputs: { cases: [{ caseId: "C-1", requestedBy: "abc" }] },
+        },
+      ],
+      sourceNodeId: "0",
+      targetNodeId: "2",
+      requestedPathCount: 1,
+      maximumVisitsPerState: 1,
+      constraints: { declare: [{
+        id: "composite-response",
+        template: "response",
+        enabled: true,
+        activation: { relation: "or", predicates: [{
+          transition: { operator: "equals", value: "Start" },
+          captures: [
+            { id: "case_id", alias: "caseId", source: "outputs", path: ["started", 0, "caseId"] },
+            { id: "participant", alias: "firstParticipant", source: "outputs", path: ["started", 0, "participants", 0] },
+          ],
+        }] },
+        target: { relation: "or", predicates: [{ transition: { operator: "equals", value: "Complete" } }] },
+        correlation: {
+          type: "group",
+          operator: "and",
+          conditions: [
+            {
+              type: "comparison",
+              left: { kind: "target", source: "inputs", path: ["cases", 0, "caseId"] },
+              operator: "=",
+              right: { kind: "activation", aliasId: "case_id" },
+            },
+            {
+              type: "comparison",
+              left: { kind: "target", source: "inputs", path: ["cases", 0, "requestedBy"] },
+              operator: "=",
+              right: { kind: "activation", aliasId: "participant" },
+            },
+          ],
+        },
+      }] },
+    });
+
+    expect(result.paths).toHaveLength(1);
+    expect(result.paths[0].explanations?.[0].correlations[0].comparisons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          matches: true,
+          right: expect.objectContaining({ alias: "caseId", value: "C-1" }),
+          left: expect.objectContaining({ path: "inputs.cases[0].caseId", value: "C-1" }),
+        }),
+        expect.objectContaining({
+          matches: true,
+          right: expect.objectContaining({ alias: "firstParticipant", value: "abc" }),
+          left: expect.objectContaining({ path: "inputs.cases[0].requestedBy", value: "abc" }),
+        }),
+      ]),
+    );
+  });
 
   it("explains position, choice, and precedence template families", () => {
     const result = findKShortestBoundedPaths({

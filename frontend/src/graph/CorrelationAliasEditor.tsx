@@ -1,63 +1,377 @@
 import type { DeclareConstraint } from "./declareConstraints";
 import type { ComparisonOperator, DataPathSegment } from "./transitionConditions";
-import FixedIndexTraversalEditor from "./FixedIndexTraversalEditor";
 import TransitionDataFieldPicker from "./TransitionDataFieldPicker";
-import { createDefaultArrayAccesses, formatConfiguredPath, materializeIndexedPath, normalizeIndexedPathForEditing } from "./transitionConditionEditorModel";
-import type { CaptureDefinition, CorrelationCondition } from "./transitionCorrelation";
-import type { TransitionDataCatalogue, TransitionDataField } from "./transitionDataCatalogue";
+import FixedIndexTraversalEditor from "./FixedIndexTraversalEditor";
+import {
+  catalogueDataPath,
+  concretizeDataPath,
+  formatConcreteDataPath,
+} from "./fixedIndexTraversalModel";
+import type {
+  CaptureDefinition,
+  CorrelationCondition,
+} from "./transitionCorrelation";
+import type {
+  TransitionDataCatalogue,
+  TransitionDataField,
+} from "./transitionDataCatalogue";
+import "./CorrelationTargetMatches.css";
 
-type Props = { constraint: DeclareConstraint; activationTransitionName: string; targetTransitionName: string; catalogue: TransitionDataCatalogue; disabled: boolean; onChange: (constraint: DeclareConstraint) => void };
-const OPERATORS: readonly Exclude<ComparisonOperator, "exists" | "does-not-exist">[] = ["=", "!=", "<", "<=", ">", ">="];
-const captures = (constraint: DeclareConstraint): CaptureDefinition[] => constraint.activation?.predicates[0]?.captures ?? [];
-const stableKey = (capture: CaptureDefinition) => capture.id ?? capture.alias;
-function nextAliasId(existing: readonly CaptureDefinition[]) { let n = existing.length + 1; while (existing.some((c) => stableKey(c) === `alias_${n}`)) n += 1; return `alias_${n}`; }
-function updateCaptures(constraint: DeclareConstraint, next: CaptureDefinition[]): DeclareConstraint {
+type Props = {
+  constraint: DeclareConstraint;
+  activationTransitionName: string;
+  targetTransitionName: string;
+  catalogue: TransitionDataCatalogue;
+  disabled: boolean;
+  onChange: (constraint: DeclareConstraint) => void;
+};
+
+type Comparison = Extract<CorrelationCondition, { type: "comparison" }>;
+type Operator = Exclude<ComparisonOperator, "exists" | "does-not-exist">;
+
+const OPERATORS: readonly Operator[] = ["=", "!=", "<", "<=", ">", ">="];
+
+function captures(constraint: DeclareConstraint): CaptureDefinition[] {
+  return constraint.activation?.predicates[0]?.captures ?? [];
+}
+
+function stableKey(capture: CaptureDefinition): string {
+  return capture.id ?? capture.alias;
+}
+
+function nextAliasId(existing: readonly CaptureDefinition[]): string {
+  let sequence = existing.length + 1;
+  while (existing.some((capture) => stableKey(capture) === `alias_${sequence}`)) sequence += 1;
+  return `alias_${sequence}`;
+}
+
+function updateCaptures(
+  constraint: DeclareConstraint,
+  nextCaptures: CaptureDefinition[],
+): DeclareConstraint {
   const activation = constraint.activation;
   if (!activation || activation.predicates.length === 0) return constraint;
   const first = activation.predicates[0];
-  return { ...constraint, activation: { ...activation, predicates: [{ ...first, ...(next.length ? { captures: next } : { captures: undefined }) }, ...activation.predicates.slice(1)] } };
+  return {
+    ...constraint,
+    activation: {
+      ...activation,
+      predicates: [
+        {
+          ...first,
+          ...(nextCaptures.length > 0 ? { captures: nextCaptures } : { captures: undefined }),
+        },
+        ...activation.predicates.slice(1),
+      ],
+    },
+  };
 }
-function simpleCorrelation(condition: CorrelationCondition | undefined): Extract<CorrelationCondition, { type: "comparison" }> | null {
-  return condition?.type === "comparison" && condition.left.kind === "target" && condition.right.kind === "activation" ? condition : null;
-}
-function fieldFor(catalogue: TransitionDataCatalogue, transitionName: string, source: "inputs" | "outputs", path: readonly DataPathSegment[]): TransitionDataField | null {
-  const normalizedPath = normalizeIndexedPathForEditing(path).path;
-  const fields = catalogue.fieldsByTransition[transitionName] ?? catalogue.allFields;
-  return fields.find((field) => field.source === source && JSON.stringify(field.path) === JSON.stringify(normalizedPath)) ?? null;
-}
-function isScalarField(field: TransitionDataField) { return field.valueTypes.every((t) => ["string", "number", "boolean", "null"].includes(t)); }
-function concretePath(field: TransitionDataField): DataPathSegment[] { return materializeIndexedPath(field.path, createDefaultArrayAccesses(field.path).map(() => ({ mode: "indexed-item" as const, index: 0 }))); }
-function displayConcrete(source: "inputs" | "outputs", path: readonly DataPathSegment[]) { const normalized = normalizeIndexedPathForEditing(path); return formatConfiguredPath(source, normalized.path, normalized.arrayAccesses); }
 
-export default function CorrelationAliasEditor({ constraint, activationTransitionName, targetTransitionName, catalogue, disabled, onChange }: Props) {
-  const aliases = captures(constraint);
-  const correlation = simpleCorrelation(constraint.correlation);
-  const selectedTargetField = correlation?.left.kind === "target" ? fieldFor(catalogue, targetTransitionName, correlation.left.source, correlation.left.path) : null;
-  const selectedAliasKey = correlation?.right.kind === "activation" ? correlation.right.aliasId ?? correlation.right.alias ?? "" : "";
-  function changeAlias(index: number, change: Partial<CaptureDefinition>) { onChange(updateCaptures(constraint, aliases.map((c, i) => i === index ? { ...c, ...change } : c))); }
-  function setSimpleCorrelation(field: TransitionDataField, aliasKey: string, operator: typeof OPERATORS[number] = "=", path = concretePath(field)) {
-    onChange({ ...constraint, correlation: { type: "comparison", left: { kind: "target", source: field.source, path }, operator, right: { kind: "activation", aliasId: aliasKey } } });
+function isEditableComparison(condition: CorrelationCondition): condition is Comparison {
+  return condition.type === "comparison" &&
+    condition.left.kind === "target" &&
+    condition.right.kind === "activation";
+}
+
+function comparisons(condition: CorrelationCondition | undefined): Comparison[] | null {
+  if (!condition) return [];
+  if (isEditableComparison(condition)) return [condition];
+  if (condition.type === "group" && condition.operator === "and" && condition.conditions.every(isEditableComparison)) {
+    return condition.conditions;
   }
-  return <section className="correlation-alias-editor">
-    <div className="correlation-alias-heading"><div><strong>Correlation aliases</strong><span>Bind one scalar activation value at fixed array indexes and compare target data with it.</span></div><button type="button" disabled={disabled} onClick={() => { const id = nextAliasId(aliases); onChange(updateCaptures(constraint, [...aliases, { id, alias: id, source: "inputs", path: [] }])); }}>Add alias</button></div>
-    {aliases.length === 0 ? <p className="correlation-alias-empty">No aliases. Add one to correlate a target with activation data.</p> : <div className="correlation-alias-list">{aliases.map((capture, index) => {
-      const selected = fieldFor(catalogue, activationTransitionName, capture.source, capture.path);
-      return <div className="correlation-alias-row" key={stableKey(capture)}>
-        <label>Alias name<input value={capture.alias} disabled={disabled} onChange={(e) => changeAlias(index, { alias: e.target.value })} /></label>
-        <TransitionDataFieldPicker catalogue={catalogue} transitionName={activationTransitionName} selectedField={selected} disabled={disabled} label="Activation source field" onSelect={(field) => { if (isScalarField(field)) changeAlias(index, { source: field.source, path: concretePath(field) }); }} />
-        {selected && <FixedIndexTraversalEditor source={capture.source} cataloguePath={selected.path} executablePath={capture.path} disabled={disabled} onChange={(path) => changeAlias(index, { path })} />}
-        {selected && <p className="correlation-summary">Selected scalar path: <code>{displayConcrete(capture.source, capture.path)}</code></p>}
-        {selected && !isScalarField(selected) && <p className="correlation-alias-warning">Choose a field observed only as string, number, boolean, or null.</p>}
-        <button type="button" className="correlation-alias-remove" disabled={disabled} onClick={() => { const removed = stableKey(capture); const next = updateCaptures(constraint, aliases.filter((_, i) => i !== index)); const referenced = selectedAliasKey === removed; onChange({ ...next, ...(referenced ? { correlation: undefined } : {}) }); }}>Remove alias</button>
-      </div>;
-    })}</div>}
-    {aliases.length > 0 && <div className="correlation-target-editor"><strong>Target matching condition</strong>
-      <TransitionDataFieldPicker catalogue={catalogue} transitionName={targetTransitionName} selectedField={selectedTargetField} disabled={disabled} label="Target field" onSelect={(field) => { if (isScalarField(field)) setSimpleCorrelation(field, selectedAliasKey || stableKey(aliases[0])); }} />
-      {correlation && selectedTargetField && correlation.left.kind === "target" && <FixedIndexTraversalEditor source={correlation.left.source} cataloguePath={selectedTargetField.path} executablePath={correlation.left.path} disabled={disabled} onChange={(path) => setSimpleCorrelation(selectedTargetField, selectedAliasKey || stableKey(aliases[0]), correlation.operator, path)} />}
-      <div className="correlation-target-controls"><label>Operator<select disabled={disabled || !correlation} value={correlation?.operator ?? "="} onChange={(e) => selectedTargetField && setSimpleCorrelation(selectedTargetField, selectedAliasKey || stableKey(aliases[0]), e.target.value as typeof OPERATORS[number], correlation?.left.kind === "target" ? correlation.left.path : undefined)}>{OPERATORS.map((op) => <option key={op} value={op}>{op}</option>)}</select></label>
-      <label>Activation alias<select disabled={disabled || !selectedTargetField} value={selectedAliasKey || stableKey(aliases[0])} onChange={(e) => selectedTargetField && setSimpleCorrelation(selectedTargetField, e.target.value, correlation?.operator ?? "=", correlation?.left.kind === "target" ? correlation.left.path : undefined)}>{aliases.map((c) => <option key={stableKey(c)} value={stableKey(c)}>{c.alias}</option>)}</select></label>
-      <button type="button" disabled={disabled || !constraint.correlation} onClick={() => onChange({ ...constraint, correlation: undefined })}>Clear match</button></div>
-      {correlation && correlation.left.kind === "target" && <p className="correlation-summary"><code>{displayConcrete(correlation.left.source, correlation.left.path)}</code> {correlation.operator} activation alias <code>{aliases.find((c) => stableKey(c) === selectedAliasKey)?.alias ?? selectedAliasKey}</code></p>}
-    </div>}
-  </section>;
+  return null;
+}
+
+function buildCorrelation(matches: readonly Comparison[]): CorrelationCondition | undefined {
+  if (matches.length === 0) return undefined;
+  if (matches.length === 1) return matches[0];
+  return { type: "group", operator: "and", conditions: [...matches] };
+}
+
+function availableFields(
+  catalogue: TransitionDataCatalogue,
+  transitionName: string,
+): TransitionDataField[] {
+  return catalogue.fieldsByTransition[transitionName] ?? catalogue.allFields;
+}
+
+function fieldFor(
+  catalogue: TransitionDataCatalogue,
+  transitionName: string,
+  source: "inputs" | "outputs",
+  path: readonly DataPathSegment[],
+): TransitionDataField | null {
+  const cataloguePath = catalogueDataPath(path);
+  return availableFields(catalogue, transitionName).find(
+    (field) => field.source === source && JSON.stringify(field.path) === JSON.stringify(cataloguePath),
+  ) ?? null;
+}
+
+function isScalarField(field: TransitionDataField): boolean {
+  return field.valueTypes.every((type) =>
+    type === "string" || type === "number" || type === "boolean" || type === "null"
+  );
+}
+
+export default function CorrelationAliasEditor({
+  constraint,
+  activationTransitionName,
+  targetTransitionName,
+  catalogue,
+  disabled,
+  onChange,
+}: Props) {
+  const aliases = captures(constraint);
+  const matches = comparisons(constraint.correlation);
+
+  function emitMatches(nextMatches: Comparison[]) {
+    onChange({ ...constraint, correlation: buildCorrelation(nextMatches) });
+  }
+
+  function addAlias() {
+    const id = nextAliasId(aliases);
+    onChange(updateCaptures(constraint, [
+      ...aliases,
+      { id, alias: id, source: "inputs", path: [] },
+    ]));
+  }
+
+  function changeAlias(index: number, change: Partial<CaptureDefinition>) {
+    onChange(updateCaptures(
+      constraint,
+      aliases.map((capture, currentIndex) => currentIndex === index ? { ...capture, ...change } : capture),
+    ));
+  }
+
+  function removeAlias(index: number) {
+    const removedKey = stableKey(aliases[index]);
+    const nextConstraint = updateCaptures(
+      constraint,
+      aliases.filter((_, currentIndex) => currentIndex !== index),
+    );
+    const nextMatches = (matches ?? []).filter((match) =>
+      match.right.kind !== "activation" ||
+      (match.right.aliasId ?? match.right.alias) !== removedKey
+    );
+    onChange({ ...nextConstraint, correlation: buildCorrelation(nextMatches) });
+  }
+
+  function updateMatch(index: number, next: Comparison) {
+    if (!matches) return;
+    emitMatches(matches.map((match, currentIndex) => currentIndex === index ? next : match));
+  }
+
+  function addMatch() {
+    if (!matches || aliases.length === 0) return;
+    const initialField = availableFields(catalogue, targetTransitionName).find(isScalarField);
+    if (!initialField) return;
+    emitMatches([
+      ...matches,
+      {
+        type: "comparison",
+        left: {
+          kind: "target",
+          source: initialField.source,
+          path: concretizeDataPath(initialField.path),
+        },
+        operator: "=",
+        right: { kind: "activation", aliasId: stableKey(aliases[0]) },
+      },
+    ]);
+  }
+
+  return (
+    <section className="correlation-alias-editor">
+      <div className="correlation-alias-heading">
+        <div>
+          <strong>Correlation aliases</strong>
+          <span>Capture scalar activation values and require one or more target matches.</span>
+        </div>
+        <button type="button" disabled={disabled} onClick={addAlias}>Add alias</button>
+      </div>
+
+      {aliases.length === 0 ? (
+        <p className="correlation-alias-empty">No aliases. Add one to correlate target data with activation data.</p>
+      ) : (
+        <div className="correlation-alias-list">
+          {aliases.map((capture, index) => {
+            const selectedField = fieldFor(
+              catalogue,
+              activationTransitionName,
+              capture.source,
+              capture.path,
+            );
+            return (
+              <div className="correlation-alias-row" key={stableKey(capture)}>
+                <label>
+                  Alias name
+                  <input
+                    disabled={disabled}
+                    value={capture.alias}
+                    onChange={(event) => changeAlias(index, { alias: event.target.value })}
+                  />
+                </label>
+                <TransitionDataFieldPicker
+                  catalogue={catalogue}
+                  transitionName={activationTransitionName}
+                  disabled={disabled}
+                  label="Activation source field"
+                  selectedField={selectedField}
+                  onSelect={(field) => {
+                    if (isScalarField(field)) {
+                      changeAlias(index, {
+                        source: field.source,
+                        path: concretizeDataPath(field.path),
+                      });
+                    }
+                  }}
+                />
+                {selectedField && (
+                  <FixedIndexTraversalEditor
+                    disabled={disabled}
+                    path={capture.path}
+                    onChange={(path) => changeAlias(index, { path })}
+                  />
+                )}
+                {selectedField && (
+                  <p className="correlation-summary">
+                    Selected scalar path: <code>{formatConcreteDataPath(capture.source, capture.path)}</code>
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="correlation-alias-remove"
+                  disabled={disabled}
+                  onClick={() => removeAlias(index)}
+                >
+                  Remove alias
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {aliases.length > 0 && (
+        <div className="correlation-target-editor">
+          <div className="correlation-target-heading">
+            <div>
+              <strong>Target matching conditions</strong>
+              <span>{matches?.length ?? 0} configured · Match ALL conditions</span>
+            </div>
+            <button
+              type="button"
+              disabled={disabled || matches === null || availableFields(catalogue, targetTransitionName).filter(isScalarField).length === 0}
+              onClick={addMatch}
+            >
+              Add target match
+            </button>
+          </div>
+
+          {matches === null ? (
+            <div className="correlation-complex-note">
+              <p>This correlation uses an advanced expression that this visual editor cannot modify.</p>
+              <button type="button" disabled={disabled} onClick={() => onChange({ ...constraint, correlation: undefined })}>
+                Replace with visual target matches
+              </button>
+            </div>
+          ) : matches.length === 0 ? (
+            <p className="correlation-alias-empty">No target matches. Add one for each activation alias that the target must match.</p>
+          ) : (
+            <div className="correlation-target-match-list">
+              {matches.map((match, index) => {
+                const target = match.left.kind === "target" ? match.left : null;
+                const selectedField = target
+                  ? fieldFor(catalogue, targetTransitionName, target.source, target.path)
+                  : null;
+                const selectedAliasKey = match.right.kind === "activation"
+                  ? match.right.aliasId ?? match.right.alias ?? ""
+                  : "";
+                const selectedAlias = aliases.find((alias) => stableKey(alias) === selectedAliasKey);
+                return (
+                  <article className="correlation-target-match" key={index}>
+                    <div className="correlation-target-match-heading">
+                      <strong>Target match {index + 1}</strong>
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => emitMatches(matches.filter((_, currentIndex) => currentIndex !== index))}
+                      >
+                        Remove match
+                      </button>
+                    </div>
+                    <TransitionDataFieldPicker
+                      catalogue={catalogue}
+                      transitionName={targetTransitionName}
+                      disabled={disabled}
+                      label="Target field"
+                      selectedField={selectedField}
+                      onSelect={(field) => {
+                        if (isScalarField(field)) {
+                          updateMatch(index, {
+                            ...match,
+                            left: {
+                              kind: "target",
+                              source: field.source,
+                              path: concretizeDataPath(field.path),
+                            },
+                          });
+                        }
+                      }}
+                    />
+                    {target && selectedField && (
+                      <FixedIndexTraversalEditor
+                        disabled={disabled}
+                        path={target.path}
+                        onChange={(path) => updateMatch(index, {
+                          ...match,
+                          left: { ...target, path },
+                        })}
+                      />
+                    )}
+                    <div className="correlation-target-controls">
+                      <label>
+                        Operator
+                        <select
+                          disabled={disabled}
+                          value={match.operator}
+                          onChange={(event) => updateMatch(index, {
+                            ...match,
+                            operator: event.target.value as Operator,
+                          })}
+                        >
+                          {OPERATORS.map((operator) => <option value={operator} key={operator}>{operator}</option>)}
+                        </select>
+                      </label>
+                      <label>
+                        Activation alias
+                        <select
+                          disabled={disabled}
+                          value={selectedAliasKey}
+                          onChange={(event) => updateMatch(index, {
+                            ...match,
+                            right: { kind: "activation", aliasId: event.target.value },
+                          })}
+                        >
+                          {aliases.map((alias) => (
+                            <option value={stableKey(alias)} key={stableKey(alias)}>{alias.alias}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    {target && selectedAlias && (
+                      <p className="correlation-summary">
+                        <code>{formatConcreteDataPath(target.source, target.path)}</code>{" "}
+                        {match.operator} activation alias <code>{selectedAlias.alias}</code>
+                      </p>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
