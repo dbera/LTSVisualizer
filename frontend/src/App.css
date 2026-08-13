@@ -1282,3 +1282,7 @@ body.resizing-side-panel canvas {
 @media (max-width: 720px) {
   .correlation-target-controls { grid-template-columns: 1fr; }
 }
+.correlation-array-traversal { min-width: 0; margin: 0; padding: 10px; border: 1px solid #dbeafe; border-radius: 7px; }
+.correlation-array-traversal legend { padding: 0 5px; color: #334155; font-size: 10px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; }
+.correlation-array-traversal label { display: grid; gap: 5px; color: #475569; font-size: 10px; font-weight: 700; }
+.correlation-array-traversal .transition-data-picker-selection { display: block; margin-top: 8px; }

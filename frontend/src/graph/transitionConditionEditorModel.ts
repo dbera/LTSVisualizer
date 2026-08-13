@@ -21,7 +21,7 @@ export type FlatTransitionCondition = {
   value?: JsonPrimitive;
 };
 
-function normalizePath(path: readonly DataPathSegment[]): {
+export function normalizeIndexedPathForEditing(path: readonly DataPathSegment[]): {
   path: DataPathSegment[];
   arrayAccesses: ArrayAccess[];
 } {
@@ -36,7 +36,7 @@ function normalizePath(path: readonly DataPathSegment[]): {
 
 function readValueCondition(condition: ValueCondition): Omit<FlatTransitionCondition, "source"> | null {
   if (condition.type === "comparison") {
-    const normalized = normalizePath(condition.path);
+    const normalized = normalizeIndexedPathForEditing(condition.path);
     return {
       path: normalized.path,
       arrayAccesses: normalized.arrayAccesses,
@@ -50,7 +50,7 @@ function readValueCondition(condition: ValueCondition): Omit<FlatTransitionCondi
   if (condition.type !== "contains-item") return null;
   const child = readValueCondition(condition.condition);
   if (child === null) return null;
-  const collection = normalizePath(condition.path);
+  const collection = normalizeIndexedPathForEditing(condition.path);
   return {
     path: [
       ...collection.path,
@@ -182,6 +182,30 @@ export function formatConfiguredPath(
     } else {
       result += `.${segment}`;
     }
+  }
+  return result;
+}
+
+
+export function materializeIndexedPath(
+  path: readonly DataPathSegment[],
+  arrayAccesses: readonly ArrayAccess[],
+): DataPathSegment[] {
+  let arrayLevel = 0;
+  const result = path.map((segment) => {
+    if (segment !== ARRAY_ITEM_SEGMENT) return segment;
+    const access = arrayAccesses[arrayLevel];
+    arrayLevel += 1;
+    if (!access || access.mode !== "indexed-item") {
+      throw new Error("Choose a fixed zero-based index for every array level.");
+    }
+    if (!Number.isInteger(access.index) || access.index < 0) {
+      throw new Error("Array indexes must be non-negative integers.");
+    }
+    return access.index;
+  });
+  if (arrayLevel !== arrayAccesses.length) {
+    throw new Error("Array traversal configuration does not match the selected field.");
   }
   return result;
 }
