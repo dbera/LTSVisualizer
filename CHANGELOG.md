@@ -4,7 +4,25 @@ All notable changes to LTSVisualizer are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/dbera/LTSVisualizer/compare/v0.6.0...HEAD)
+## [Unreleased](https://github.com/dbera/LTSVisualizer)
+
+## [0.7.0](https://github.com/dbera/LTSVisualizer/compare/v0.6.0...v0.7.0) - 2026-10-14
+
+### Added
+
+- Additive right-click neighborhood exploration for visible graph states.
+- Expansion using the selected one-, two-, or three-hop depth.
+- Preservation of existing node positions, zoom, and pan during expansion.
+- Right-click exploration during manual path selection without changing the selected path.
+
+### Changed
+
+- Newly revealed neighborhood states are positioned locally around the selected state.
+- Right-click neighborhood expansion has no effect in full-graph, computed-path, or cyclic-component-only views.
+
+### Quality
+
+- Added tests for neighborhood depth, incoming and outgoing adjacency, parallel transitions, self-loops, unknown states, and graph immutability.
 
 ## [0.6.0](https://github.com/dbera/LTSVisualizer/compare/v0.5.0...v0.6.0) - 2026-08-10
 
