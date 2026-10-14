@@ -43,6 +43,7 @@ import type { BoundedPath, ConstraintExplanationEvent, PathSearchStrategy } from
 import type { StronglyConnectedComponent } from "./graph/graphAnalysis";
 import { buildTransitionCatalogue } from "./graph/transitionCatalog";
 import { buildTransitionDataCatalogue } from "./graph/transitionDataCatalogue";
+import { collectUndirectedNeighborhood } from "./graph/neighborhoodExpansion";
 import {
   SIDE_PANEL_COLLAPSED_STORAGE_KEY,
   SIDE_PANEL_WIDTH_STORAGE_KEY,
@@ -123,6 +124,7 @@ function App() {
   const selectedPathRef = useRef<SelectedPath | null>(null);
   const showPathContextRef = useRef<(path: SelectedPath) => void>(() => {});
   const addEdgeToPathRef = useRef<(edgeId: string) => void>(() => {});
+  const expandNeighborhoodRef = useRef<(stateId: string) => void>(() => {});
   const graphViewBeforeComputedPathRef = useRef<GraphViewSnapshot | null>(null);
 
   const [status, setStatus] = useState("Select an LTS graph file to begin");
@@ -785,6 +787,121 @@ function App() {
     setComputedPathViewActive(false);
     graphViewBeforeComputedPathRef.current = null;
   }
+  function expandNeighborhoodFromNode(stateId: string) {
+    const graph = graphRef.current;
+    const cy = cyRef.current;
+    if (!graph || !cy) return;
+
+    // Additive exploration is meaningful only in the ordinary neighborhood
+    // view. Special views intentionally own their exact visible element set.
+    if (showingAll || computedPathViewActive || selectedCyclicComponentId !== null) {
+      return;
+    }
+
+    const expansion = collectUndirectedNeighborhood(graph, stateId, hopCount);
+    const visibleNodeIds = new Set(cy.nodes().map((node) => node.id()));
+    const targetNodeIds = new Set([...visibleNodeIds, ...expansion.nodeIds]);
+    const visibleEdgeIds = new Set(cy.edges().map((edge) => edge.id()));
+    const targetEdges = graph.edges.filter(
+      (edge) =>
+        targetNodeIds.has(edge.source) && targetNodeIds.has(edge.target),
+    );
+    const missingNodeIds = graph.nodes
+      .map((node) => node.id)
+      .filter((nodeId) =>
+        targetNodeIds.has(nodeId) && !visibleNodeIds.has(nodeId),
+      );
+    const missingEdges = targetEdges.filter(
+      (edge) => !visibleEdgeIds.has(edge.id),
+    );
+
+    if (missingNodeIds.length === 0 && missingEdges.length === 0) {
+      setStatus(
+        `State ${stateId}: no additional states or transitions within ${hopCount} hop${hopCount === 1 ? "" : "s"}.`,
+      );
+      return;
+    }
+
+    const anchor = cy.getElementById(stateId);
+    if (anchor.empty()) return;
+    const anchorPosition = { ...anchor.position() };
+    const previousZoom = cy.zoom();
+    const previousPan = { ...cy.pan() };
+    const existingPositions = new Map(
+      cy.nodes().map((node) => [node.id(), { ...node.position() }] as const),
+    );
+    const occupiedPositions = [...existingPositions.values()];
+    const groupedByDistance = new Map<number, string[]>();
+    for (const nodeId of missingNodeIds) {
+      const distance = expansion.distanceByNodeId.get(nodeId) ?? 1;
+      const group = groupedByDistance.get(distance) ?? [];
+      group.push(nodeId);
+      groupedByDistance.set(distance, group);
+    }
+
+    cy.startBatch();
+    if (missingNodeIds.length > 0) {
+      cy.add(
+        buildElements(graph, new Set(missingNodeIds), [], showTransitionLabels),
+      );
+      for (const [distance, nodeIds] of [...groupedByDistance.entries()].sort(
+        ([left], [right]) => left - right,
+      )) {
+        nodeIds.forEach((nodeId, index) => {
+          const radius = 190 * Math.max(1, distance);
+          const baseAngle = (2 * Math.PI * index) / Math.max(1, nodeIds.length);
+          let position = anchorPosition;
+          // Prefer a free deterministic point on the distance ring. Existing
+          // nodes are never moved, even when every candidate is occupied.
+          for (let attempt = 0; attempt < 24; attempt += 1) {
+            const angle = baseAngle + (2 * Math.PI * attempt) / 24;
+            const candidate = {
+              x: anchorPosition.x + radius * Math.cos(angle),
+              y: anchorPosition.y + radius * Math.sin(angle),
+            };
+            position = candidate;
+            if (
+              occupiedPositions.every(
+                (occupied) =>
+                  Math.hypot(
+                    occupied.x - candidate.x,
+                    occupied.y - candidate.y,
+                  ) >= 90,
+              )
+            ) {
+              break;
+            }
+          }
+          cy.getElementById(nodeId).position(position);
+          occupiedPositions.push(position);
+        });
+      }
+    }
+    if (missingEdges.length > 0) {
+      cy.add(buildElements(graph, new Set<string>(), missingEdges, showTransitionLabels));
+    }
+    // Defensive restoration guarantees that adding elements cannot disturb
+    // manually arranged or previously laid-out nodes.
+    cy.nodes().forEach((node) => {
+      const position = existingPositions.get(node.id());
+      if (position) node.position(position);
+    });
+    cy.nodes().unlock();
+    cy.nodes().grabify();
+    cy.endBatch();
+    cy.zoom(previousZoom);
+    cy.pan(previousPan);
+
+    if (selectedPathRef.current) {
+      applyPathClasses(selectedPathRef.current);
+    }
+    setStatus(
+      `Expanded state ${stateId} by ${hopCount} hop${hopCount === 1 ? "" : "s"}: added ${missingNodeIds.length} state${missingNodeIds.length === 1 ? "" : "s"} and ${missingEdges.length} transition${missingEdges.length === 1 ? "" : "s"}.`,
+    );
+  }
+
+  expandNeighborhoodRef.current = expandNeighborhoodFromNode;
+
   function showNeighborhood(
     stateId: string,
     hops: number,
@@ -1451,6 +1568,10 @@ function App() {
       }
     });
 
+    cy.on("cxttap", "node", (event) => {
+      event.originalEvent?.preventDefault();
+      expandNeighborhoodRef.current(event.target.id());
+    });
     cy.on("tap", "node", (event) => {
       const node = event.target;
       const stateId = node.id();
